@@ -1,8 +1,20 @@
 # RAGOps Studio for Document Intelligence / Content Understanding
 
-A workbench for refining the **document parsing layer** at the heart of every RAG pipeline. Iterate through analyze → inspect → adjust → compare cycles using Azure AI **Document Intelligence (DI)** and **Content Understanding (CU)**, all from a single browser-based tool that runs locally or in a container (Flask backend).
+![Azure DI](https://img.shields.io/badge/Azure-Document%20Intelligence-0078D4?style=flat-square&logo=microsoft-azure)
+![Azure CU](https://img.shields.io/badge/Azure-Content%20Understanding-0078D4?style=flat-square&logo=microsoft-azure)
+![Flask](https://img.shields.io/badge/Flask-3.0-000000?style=flat-square&logo=flask)
+![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python)
+![PDF.js](https://img.shields.io/badge/PDF.js-v5-F7DF1E?style=flat-square)
+
+A workbench for refining the **document parsing layer** at the heart of every RAG pipeline. Iterate through analyze → inspect → adjust → compare cycles using Azure AI **Document Intelligence (DI)** and **Content Understanding (CU)**, all from a lightweight single browser-based tool that runs locally or in a container (Flask backend).
+
+> 📦 **RAGOps Studio Series**
+> - [RAGOps Studio — for Azure AI Search](https://github.com/nohanaga/ragops-studio): A React/TypeScript workbench for observing, comparing, and improving search index quality (Series #1)
+> - **RAGOps Studio — for DI/CU** (this repo): A workbench for refining the document parsing layer
 
 - 日本語版: [README.ja.md](README.ja.md)
+
+![image.png](./docs/images/001.jpg)
 
 ## Why RAGOps Studio?
 
@@ -11,7 +23,7 @@ RAG quality starts with document extraction. A wrong model choice, a missing opt
 RAGOps Studio provides that feedback loop — the **observe → compare → improve** entry point for RAGOps:
 
 - **Analyze**: Switch DI / CU models and options with one click, run extraction, view Summary / Items / JSON
-- **Inspect**: Overlay bounding boxes on PDF/image previews to *see* exactly what was extracted and where
+- **Inspect**: Overlay bounding boxes (BBox) on PDF/image previews to *see* exactly what was extracted and where
 - **Iterate**: Change options and re-run instantly; CU derived analyzers are managed automatically
 - **Compare**: Semantic Diff across multiple cached variants — evaluate impact before committing to your RAG pipeline
 
@@ -39,9 +51,9 @@ All results are cached (file SHA-256 + model + options SHA-1), so you can iterat
 - CU derived analyzer auto-management: when options change, automatically creates `studio.<source>.<hash>` derived analyzers
 
 ### Visual inspection
-- **PDF viewer**: pdf.js v5 rendering + SVG BBox overlay (Lines / Words / Paragraphs / Tables / KVP / SelectionMarks / Figures / Formulas / Barcodes)
+- **PDF viewer**: pdf.js v5 rendering + SVG bounding box (BBox) overlay (Lines / Words / Paragraphs / Tables / KVP / SelectionMarks / Figures / Formulas / Barcodes)
 - **Media viewer**: audio/video file preview playback
-- **3D Structure viewer**: 3D exploded view of document elements
+- **3D Structure viewer**: 3D exploded view of document elements (🥚 Easter egg — a joke feature, not a practical tool)
 - *See* results instead of reading JSON — spot chunk boundaries, field extraction errors, and OCR issues instantly
 
 ### Cache & Library (result accumulation and comparison)
@@ -276,3 +288,11 @@ Re-run the same command to rebuild/push the image and update the Container App.
 - Usually you do NOT need to re-set endpoints/keys (secrets/env are kept).
 - To rotate keys, pass `-DiKey` / `-CuKey` to update secrets.
 - To switch auth mode, pass the new `-DiAuthMode` / `-CuAuthMode` value.
+
+
+## License
+
+This project is licensed under the terms specified in the [LICENSE](LICENSE) file.
+
+
+This is a personal project and is not an official Microsoft product. This project is community-driven and provided AS-IS without any warranties. The developers, including Microsoft, assume no responsibility for any issues arising from the use of this software, and no official support is provided.

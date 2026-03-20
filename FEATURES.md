@@ -256,7 +256,7 @@ CU GA (2025-11-01) does not support per-request config overrides. When UI option
 1. **pdf.js v5 ESM** loaded from CDN (fallback: `static/vendor/pdfjs/` for offline use).
 2. PDF rendered to `<canvas>` element.
 3. SVG `<svg>` overlay positioned absolutely on top of canvas.
-4. Bounding boxes drawn as SVG `<path>` elements using polygon coordinates.
+4. Bounding boxes (BBox) drawn as SVG `<path>` elements using polygon coordinates.
 
 ### BBox Overlay Modes (10 types)
 
@@ -318,6 +318,8 @@ CU GA (2025-11-01) does not support per-request config overrides. When UI option
 ---
 
 ## 10. 3D Structure Viewer
+
+> 🥚 **Easter egg**: This is a joke feature, not a practical tool. It’s here for visual impact and fun — not part of the actual analysis workflow.
 
 An interactive 3D exploded view of document elements using pure CSS 3D transforms (no WebGL).
 
