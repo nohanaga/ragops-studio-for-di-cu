@@ -105,6 +105,18 @@ DI / CU それぞれ独立した認証設定を持ちます（`DI_AUTH_MODE` / `
 
 ## セットアップ
 
+**macOS / Linux:**
+
+```bash
+cd <this-repo>
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+```
+
+**Windows (PowerShell):**
+
 ```powershell
 cd <this-repo>
 python -m venv .venv
@@ -138,7 +150,7 @@ CU_KEY=<your-cu-key>
 
 ## 起動
 
-```powershell
+```bash
 python app.py
 ```
 
@@ -165,16 +177,48 @@ python app.py
 
 - Azure CLI がインストール済みであること
 - `az login` 済みであること
-- DI / CU のエンドポイント（+ キーまたはマネージド ID）を用意していること
+- 以下の Azure リソースが**事前に作成済み**であること（デプロイスクリプトでは作成されません）:
+  - **Azure AI Document Intelligence** — エンドポイント URL を `--di-endpoint` / `-DiEndpoint` に指定
+  - **Azure AI Content Understanding** (Azure AI Foundry 経由で作成した AI Services) — エンドポイント URL を `--cu-endpoint` / `-CuEndpoint` に指定
+  - 少なくともどちらか 1 つが必要です
+
+<details>
+<summary>リソースの作成例（Azure CLI）</summary>
+
+```bash
+# Document Intelligence (FormRecognizer)
+az cognitiveservices account create \
+    --name <your-di-resource-name> \
+    --resource-group <your-resource-group> \
+    --kind FormRecognizer \
+    --sku S0 \
+    --location japaneast
+
+# エンドポイント確認
+az cognitiveservices account show \
+    --name <your-di-resource-name> \
+    --resource-group <your-resource-group> \
+    --query properties.endpoint -o tsv
+```
+
+Content Understanding は Azure AI Foundry プロジェクトに紐づく **AI Services アカウント** のエンドポイントを使用します。
+`--cu-resource-name` / `-CuResourceName` には `Microsoft.CognitiveServices/accounts` のリソース名を指定してください。
+
+```bash
+# 既存のリソース一覧を確認
+az cognitiveservices account list -o table
+```
+
+</details>
 
 ### ストレージモード
 
 デプロイスクリプトは 2 つのストレージモードをサポートします:
 
-| モード | スクリプトオプション | 永続化方式 | ストレージ認証 |
-|---|---|---|---|
-| **SMB** (デフォルト) | `-StorageMode smb` | Azure Files ボリュームマウント (`/app/storage`) | ストレージアカウントキー (SMB の制約) |
-| **Blob** | `-StorageMode blob` | Azure Blob Storage SDK で直接 R/W | マネージド ID (`DefaultAzureCredential`) |
+| モード | PowerShell | Bash | 永続化方式 | ストレージ認証 |
+|---|---|---|---|---|
+| **SMB** (デフォルト) | `-StorageMode smb` | `--storage-mode smb` | Azure Files ボリュームマウント (`/app/storage`) | ストレージアカウントキー (SMB の制約) |
+| **Blob** | `-StorageMode blob` | `--storage-mode blob` | Azure Blob Storage SDK で直接 R/W | マネージド ID (`DefaultAzureCredential`) |
 
 - **SMB モード**: スクリプトが Storage Account / File Share 作成 → CAE ストレージ登録 → ボリュームマウントまで自動設定
 - **Blob モード**: スクリプトが Storage Account 作成 (`allowSharedKeyAccess=false`) → システム割り当て MI 有効化 → `Storage Blob Data Contributor` ロール付与 → Blob コンテナ作成まで自動設定
@@ -185,25 +229,31 @@ python app.py
 
 デプロイスクリプトは DI の認証設定を自動構成します:
 
-| モード | スクリプトオプション | 説明 |
-|---|---|---|
-| **Key** (デフォルト) | `-DiAuthMode key` | API キーを Container Apps の secret に格納 |
-| **Identity** | `-DiAuthMode identity` | システム割り当て MI 有効化 + `Cognitive Services User` ロールを自動割り当て |
+| モード | PowerShell | Bash | 説明 |
+|---|---|---|---|
+| **Key** (デフォルト) | `-DiAuthMode key` | `--di-auth-mode key` | API キーを Container Apps の secret に格納 |
+| **Identity** | `-DiAuthMode identity` | `--di-auth-mode identity` | システム割り当て MI 有効化 + `Cognitive Services User` ロールを自動割り当て |
 
 ### CU 認証モード
 
 デプロイスクリプトは CU の認証も同様にサポートします:
 
-| モード | スクリプトオプション | 説明 |
-|---|---|---|
-| **Key** (デフォルト) | `-CuAuthMode key` | API キーを Container Apps の secret に格納 |
-| **Identity** | `-CuAuthMode identity` | システム割り当て MI 有効化 + `Cognitive Services User` ロールを自動割り当て |
+| モード | PowerShell | Bash | 説明 |
+|---|---|---|---|
+| **Key** (デフォルト) | `-CuAuthMode key` | `--cu-auth-mode key` | API キーを Container Apps の secret に格納 |
+| **Identity** | `-CuAuthMode identity` | `--cu-auth-mode identity` | システム割り当て MI 有効化 + `Cognitive Services User` ロールを自動割り当て |
 
 > 💡 DI と CU のうち少なくとも 1 つのエンドポイントが必要です。DI のみ・CU のみ・両方の構成に対応しています。
 
 ### デプロイ（初回: 作成 / 2回目以降: 更新）
 
-**パターン 1: DI キー認証 + SMB ストレージ（最もシンプル）**
+> 💡 DI / CU のエンドポイントとキーは環境変数（`DI_ENDPOINT`, `DI_KEY`, `CU_ENDPOINT`, `CU_KEY`）でもコマンドライン引数でも渡せます。以下の例では環境変数を使用しています。
+>
+> スクリプトの主なデフォルト値: `-Location japaneast` / `-ResourceGroupName rg-ragops-studio` / `-AcrName acrragopsstudio`。変更したい場合のみ指定してください。
+
+#### パターン 1: DI キー認証 + SMB ストレージ（最もシンプル）
+
+**PowerShell (Windows):**
 
 ```powershell
 $env:DI_ENDPOINT = "https://<your-di>.cognitiveservices.azure.com/"
@@ -211,11 +261,23 @@ $env:DI_KEY = "<your-di-key>"
 
 ./scripts/deploy_aca.ps1 `
     -Location japaneast `
-    -ResourceGroupName rg-ragops-studio `
-    -AcrName <uniqueacrname>
+    -ResourceGroupName rg-ragops-studio
 ```
 
-**パターン 2: DI マネージド ID + Blob ストレージ（キーレス）**
+**Bash (macOS / Linux):**
+
+```bash
+export DI_ENDPOINT="https://<your-di>.cognitiveservices.azure.com/"
+export DI_KEY="<your-di-key>"
+
+./scripts/deploy_aca.sh \
+    --location japaneast \
+    --resource-group rg-ragops-studio
+```
+
+#### パターン 2: DI マネージド ID + Blob ストレージ（キーレス）
+
+**PowerShell (Windows):**
 
 ```powershell
 $env:DI_ENDPOINT = "https://<your-di>.cognitiveservices.azure.com/"
@@ -223,79 +285,136 @@ $env:DI_ENDPOINT = "https://<your-di>.cognitiveservices.azure.com/"
 ./scripts/deploy_aca.ps1 `
     -Location japaneast `
     -ResourceGroupName rg-ragops-studio `
-    -AcrName <uniqueacrname> `
     -DiAuthMode identity `
     -DiResourceName <your-di-resource-name> `
     -StorageMode blob
 ```
 
-**パターン 3: DI + CU（両方キー認証）**
+**Bash (macOS / Linux):**
+
+```bash
+export DI_ENDPOINT="https://<your-di>.cognitiveservices.azure.com/"
+
+./scripts/deploy_aca.sh \
+    --location japaneast \
+    --resource-group rg-ragops-studio \
+    --di-auth-mode identity \
+    --di-resource-name <your-di-resource-name> \
+    --storage-mode blob
+```
+
+#### パターン 3: DI + CU（両方キー認証）
+
+**PowerShell (Windows):**
 
 ```powershell
 $env:DI_ENDPOINT = "https://<your-di>.cognitiveservices.azure.com/"
 $env:DI_KEY = "<your-di-key>"
+$env:CU_ENDPOINT = "https://<your-cu>.cognitiveservices.azure.com/"
+$env:CU_KEY = "<your-cu-key>"
 
 ./scripts/deploy_aca.ps1 `
     -Location japaneast `
-    -ResourceGroupName rg-ragops-studio `
-    -AcrName <uniqueacrname> `
-    -CuEndpoint "https://<your-cu>.cognitiveservices.azure.com/" `
-    -CuKey "<your-cu-key>"
+    -ResourceGroupName rg-ragops-studio
 ```
 
-**パターン 4: DI + CU（両方マネージド ID、キーレス）**
+**Bash (macOS / Linux):**
+
+```bash
+export DI_ENDPOINT="https://<your-di>.cognitiveservices.azure.com/"
+export DI_KEY="<your-di-key>"
+export CU_ENDPOINT="https://<your-cu>.cognitiveservices.azure.com/"
+export CU_KEY="<your-cu-key>"
+
+./scripts/deploy_aca.sh \
+    --location japaneast \
+    --resource-group rg-ragops-studio
+```
+
+#### パターン 4: DI + CU（両方マネージド ID、キーレス）
+
+**PowerShell (Windows):**
 
 ```powershell
 $env:DI_ENDPOINT = "https://<your-di>.cognitiveservices.azure.com/"
+$env:CU_ENDPOINT = "https://<your-cu>.cognitiveservices.azure.com/"
 
 ./scripts/deploy_aca.ps1 `
     -Location japaneast `
     -ResourceGroupName rg-ragops-studio `
-    -AcrName <uniqueacrname> `
     -DiAuthMode identity `
     -DiResourceName <your-di-resource-name> `
-    -CuEndpoint "https://<your-cu>.cognitiveservices.azure.com/" `
     -CuAuthMode identity `
     -CuResourceName <your-cu-resource-name> `
     -StorageMode blob
 ```
 
-**パターン 5: CU のみ（キー認証）**
+**Bash (macOS / Linux):**
 
-```powershell
-./scripts/deploy_aca.ps1 `
-    -Location japaneast `
-    -ResourceGroupName rg-ragops-studio `
-    -AcrName <uniqueacrname> `
-    -CuEndpoint "https://<your-cu>.cognitiveservices.azure.com/" `
-    -CuKey "<your-cu-key>"
+```bash
+export DI_ENDPOINT="https://<your-di>.cognitiveservices.azure.com/"
+export CU_ENDPOINT="https://<your-cu>.cognitiveservices.azure.com/"
+
+./scripts/deploy_aca.sh \
+    --location japaneast \
+    --resource-group rg-ragops-studio \
+    --di-auth-mode identity \
+    --di-resource-name <your-di-resource-name> \
+    --cu-auth-mode identity \
+    --cu-resource-name <your-cu-resource-name> \
+    --storage-mode blob
 ```
 
-**オプション**
+#### パターン 5: CU のみ（キー認証）
 
-| パラメータ | 説明 |
-|---|---|
-| `-UploadsEnabled $true` | アップロードを有効化 |
-| `-StorageAccountName "name"` | ストレージアカウント名を明示指定（未指定なら自動生成） |
-| `-StorageShareName "name"` | ファイル共有名（SMB モード、デフォルト: `appstorage`） |
-| `-StorageShareQuotaGiB 20` | ファイル共有サイズ（SMB モード、デフォルト: 10 GiB） |
-| `-BlobContainerName "name"` | Blob コンテナ名（Blob モード、デフォルト: `appstorage`） |
-| `-DiAuthMode key\|identity` | DI 認証モード（デフォルト: `key`） |
-| `-DiResourceName "name"` | DI リソース名（identity モード時の RBAC スコープ指定） |
-| `-DiResourceGroupName "name"` | DI リソースグループ（デフォルト: `-ResourceGroupName` と同じ） |
-| `-CuEndpoint "url"` | CU エンドポイント URL |
-| `-CuKey "key"` | CU API キー（key モード） |
-| `-CuAuthMode key\|identity` | CU 認証モード（デフォルト: `key`） |
-| `-CuResourceName "name"` | CU リソース名（identity モード時の RBAC スコープ指定） |
-| `-CuResourceGroupName "name"` | CU リソースグループ（デフォルト: `-ResourceGroupName` と同じ） |
+**PowerShell (Windows):**
+
+```powershell
+$env:CU_ENDPOINT = "https://<your-cu>.cognitiveservices.azure.com/"
+$env:CU_KEY = "<your-cu-key>"
+
+./scripts/deploy_aca.ps1 `
+    -Location japaneast `
+    -ResourceGroupName rg-ragops-studio
+```
+
+**Bash (macOS / Linux):**
+
+```bash
+export CU_ENDPOINT="https://<your-cu>.cognitiveservices.azure.com/"
+export CU_KEY="<your-cu-key>"
+
+./scripts/deploy_aca.sh \
+    --location japaneast \
+    --resource-group rg-ragops-studio
+```
+
+#### オプション
+
+デフォルト値を変更したい場合のみ指定してください:
+
+| PowerShell | Bash | デフォルト | 説明 |
+|---|---|---|---|
+| `-Location` | `--location` | `japaneast` | Azure リージョン |
+| `-ResourceGroupName` | `--resource-group` | `rg-ragops-studio` | リソースグループ名 |
+| `-AcrName` | `--acr-name` | `acrragopsstudio` | ACR 名 |
+| `-StorageShareName "name"` | `--storage-share name` | `appstorage` | ファイル共有名（SMB モード） |
+| `-StorageShareQuotaGiB 20` | `--storage-share-quota 20` | `10` | ファイル共有サイズ GiB（SMB モード） |
+| `-BlobContainerName "name"` | `--blob-container name` | `appstorage` | Blob コンテナ名（Blob モード） |
+| `-DiAuthMode key\|identity` | `--di-auth-mode key\|identity` | `key` | DI 認証モード |
+| `-DiResourceName "name"` | `--di-resource-name name` | — | DI リソース名（identity モード時の RBAC スコープ指定） |
+| `-DiResourceGroupName "name"` | `--di-resource-group name` | `--resource-group` と同じ | DI リソースグループ |
+| `-CuAuthMode key\|identity` | `--cu-auth-mode key\|identity` | `key` | CU 認証モード |
+| `-CuResourceName "name"` | `--cu-resource-name name` | — | CU リソース名（identity モード時の RBAC スコープ指定） |
+| `-CuResourceGroupName "name"` | `--cu-resource-group name` | `--resource-group` と同じ | CU リソースグループ |
 
 ### 更新
 
 同じコマンドをもう一度実行するだけで、ACR イメージを再ビルドし Container App を更新します。
 
 - 更新時は通常エンドポイント/キーの再セット不要です（既存の secret/env を保持）
-- キーをローテーションしたい場合は `-DiKey` / `-CuKey` を渡すと secret を更新します
-- 認証モードを切り替える場合は `-DiAuthMode` / `-CuAuthMode` を指定してください
+- キーをローテーションしたい場合は `-DiKey` / `-CuKey`（bash: `--di-key` / `--cu-key`）を渡すと secret を更新します
+- 認証モードを切り替える場合は `-DiAuthMode` / `-CuAuthMode`（bash: `--di-auth-mode` / `--cu-auth-mode`）を指定してください
 
 ## ライセンス
 

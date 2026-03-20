@@ -103,6 +103,18 @@ DI and CU each have independent auth settings via `DI_AUTH_MODE` / `CU_AUTH_MODE
 
 ## Setup
 
+**macOS / Linux:**
+
+```bash
+cd <this-repo>
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+```
+
+**Windows (PowerShell):**
+
 ```powershell
 cd <this-repo>
 python -m venv .venv
@@ -136,7 +148,7 @@ DI_KEY=<your-di-key>          # not needed for identity mode
 
 ## Run
 
-```powershell
+```bash
 python app.py
 ```
 
@@ -163,16 +175,48 @@ Open `http://127.0.0.1:5000/`.
 
 - Azure CLI installed
 - Logged in via `az login`
-- DI / CU endpoint (+ key or Managed Identity) available
+- The following Azure resources must be **created beforehand** (the deploy script does not create them):
+  - **Azure AI Document Intelligence** — provide endpoint URL via `--di-endpoint` / `-DiEndpoint`
+  - **Azure AI Content Understanding** (AI Services created via Azure AI Foundry) — provide endpoint URL via `--cu-endpoint` / `-CuEndpoint`
+  - At least one of the above is required
+
+<details>
+<summary>Example: create resources with Azure CLI</summary>
+
+```bash
+# Document Intelligence (FormRecognizer)
+az cognitiveservices account create \
+    --name <your-di-resource-name> \
+    --resource-group <your-resource-group> \
+    --kind FormRecognizer \
+    --sku S0 \
+    --location japaneast
+
+# Check endpoint
+az cognitiveservices account show \
+    --name <your-di-resource-name> \
+    --resource-group <your-resource-group> \
+    --query properties.endpoint -o tsv
+```
+
+For Content Understanding, use the endpoint of the **AI Services account** associated with your Azure AI Foundry project.
+For `--cu-resource-name` / `-CuResourceName`, specify the `Microsoft.CognitiveServices/accounts` resource name.
+
+```bash
+# List existing resources
+az cognitiveservices account list -o table
+```
+
+</details>
 
 ### Storage modes
 
 The deploy script supports 2 storage modes:
 
-| Mode | Script option | Persistence method | Storage auth |
-|---|---|---|---|
-| **SMB** (default) | `-StorageMode smb` | Azure Files volume mount (`/app/storage`) | Storage account key (SMB constraint) |
-| **Blob** | `-StorageMode blob` | Azure Blob Storage SDK direct R/W | Managed Identity (`DefaultAzureCredential`) |
+| Mode | PowerShell | Bash | Persistence method | Storage auth |
+|---|---|---|---|---|
+| **SMB** (default) | `-StorageMode smb` | `--storage-mode smb` | Azure Files volume mount (`/app/storage`) | Storage account key (SMB constraint) |
+| **Blob** | `-StorageMode blob` | `--storage-mode blob` | Azure Blob Storage SDK direct R/W | Managed Identity (`DefaultAzureCredential`) |
 
 - **SMB mode**: script auto-configures Storage Account / File Share creation → CAE storage registration → volume mount
 - **Blob mode**: script auto-configures Storage Account creation (`allowSharedKeyAccess=false`) → system-assigned MI → `Storage Blob Data Contributor` role → Blob container creation
@@ -183,25 +227,31 @@ The deploy script supports 2 storage modes:
 
 The deploy script auto-configures DI authentication:
 
-| Mode | Script option | Description |
-|---|---|---|
-| **Key** (default) | `-DiAuthMode key` | API key stored as Container Apps secret |
-| **Identity** | `-DiAuthMode identity` | System-assigned MI enabled + auto-assigned `Cognitive Services User` role |
+| Mode | PowerShell | Bash | Description |
+|---|---|---|---|
+| **Key** (default) | `-DiAuthMode key` | `--di-auth-mode key` | API key stored as Container Apps secret |
+| **Identity** | `-DiAuthMode identity` | `--di-auth-mode identity` | System-assigned MI enabled + auto-assigned `Cognitive Services User` role |
 
 ### CU auth modes
 
 The deploy script also supports CU authentication with the same patterns:
 
-| Mode | Script option | Description |
-|---|---|---|
-| **Key** (default) | `-CuAuthMode key` | API key stored as Container Apps secret |
-| **Identity** | `-CuAuthMode identity` | System-assigned MI enabled + auto-assigned `Cognitive Services User` role |
+| Mode | PowerShell | Bash | Description |
+|---|---|---|---|
+| **Key** (default) | `-CuAuthMode key` | `--cu-auth-mode key` | API key stored as Container Apps secret |
+| **Identity** | `-CuAuthMode identity` | `--cu-auth-mode identity` | System-assigned MI enabled + auto-assigned `Cognitive Services User` role |
 
 > 💡 At least one of DI or CU must be configured (endpoint provided). You can deploy with DI only, CU only, or both.
 
 ### Deploy (create on first run, update afterwards)
 
-**Pattern 1: DI key auth + SMB storage (simplest)**
+> 💡 DI / CU endpoints and keys can be passed via environment variables (`DI_ENDPOINT`, `DI_KEY`, `CU_ENDPOINT`, `CU_KEY`) or command-line arguments. The examples below use environment variables.
+>
+> Key script defaults: `-Location japaneast` / `-ResourceGroupName rg-ragops-studio` / `-AcrName acrragopsstudio`. Only specify these if you need different values.
+
+#### Pattern 1: DI key auth + SMB storage (simplest)
+
+**PowerShell (Windows):**
 
 ```powershell
 $env:DI_ENDPOINT = "https://<your-di>.cognitiveservices.azure.com/"
@@ -209,11 +259,23 @@ $env:DI_KEY = "<your-di-key>"
 
 ./scripts/deploy_aca.ps1 `
     -Location japaneast `
-    -ResourceGroupName rg-ragops-studio `
-    -AcrName <uniqueacrname>
+    -ResourceGroupName rg-ragops-studio
 ```
 
-**Pattern 2: DI Managed Identity + Blob storage (keyless)**
+**Bash (macOS / Linux):**
+
+```bash
+export DI_ENDPOINT="https://<your-di>.cognitiveservices.azure.com/"
+export DI_KEY="<your-di-key>"
+
+./scripts/deploy_aca.sh \
+    --location japaneast \
+    --resource-group rg-ragops-studio
+```
+
+#### Pattern 2: DI Managed Identity + Blob storage (keyless)
+
+**PowerShell (Windows):**
 
 ```powershell
 $env:DI_ENDPOINT = "https://<your-di>.cognitiveservices.azure.com/"
@@ -221,79 +283,136 @@ $env:DI_ENDPOINT = "https://<your-di>.cognitiveservices.azure.com/"
 ./scripts/deploy_aca.ps1 `
     -Location japaneast `
     -ResourceGroupName rg-ragops-studio `
-    -AcrName <uniqueacrname> `
     -DiAuthMode identity `
     -DiResourceName <your-di-resource-name> `
     -StorageMode blob
 ```
 
-**Pattern 3: DI + CU (both key auth)**
+**Bash (macOS / Linux):**
+
+```bash
+export DI_ENDPOINT="https://<your-di>.cognitiveservices.azure.com/"
+
+./scripts/deploy_aca.sh \
+    --location japaneast \
+    --resource-group rg-ragops-studio \
+    --di-auth-mode identity \
+    --di-resource-name <your-di-resource-name> \
+    --storage-mode blob
+```
+
+#### Pattern 3: DI + CU (both key auth)
+
+**PowerShell (Windows):**
 
 ```powershell
 $env:DI_ENDPOINT = "https://<your-di>.cognitiveservices.azure.com/"
 $env:DI_KEY = "<your-di-key>"
+$env:CU_ENDPOINT = "https://<your-cu>.cognitiveservices.azure.com/"
+$env:CU_KEY = "<your-cu-key>"
 
 ./scripts/deploy_aca.ps1 `
     -Location japaneast `
-    -ResourceGroupName rg-ragops-studio `
-    -AcrName <uniqueacrname> `
-    -CuEndpoint "https://<your-cu>.cognitiveservices.azure.com/" `
-    -CuKey "<your-cu-key>"
+    -ResourceGroupName rg-ragops-studio
 ```
 
-**Pattern 4: DI + CU (both Managed Identity, keyless)**
+**Bash (macOS / Linux):**
+
+```bash
+export DI_ENDPOINT="https://<your-di>.cognitiveservices.azure.com/"
+export DI_KEY="<your-di-key>"
+export CU_ENDPOINT="https://<your-cu>.cognitiveservices.azure.com/"
+export CU_KEY="<your-cu-key>"
+
+./scripts/deploy_aca.sh \
+    --location japaneast \
+    --resource-group rg-ragops-studio
+```
+
+#### Pattern 4: DI + CU (both Managed Identity, keyless)
+
+**PowerShell (Windows):**
 
 ```powershell
 $env:DI_ENDPOINT = "https://<your-di>.cognitiveservices.azure.com/"
+$env:CU_ENDPOINT = "https://<your-cu>.cognitiveservices.azure.com/"
 
 ./scripts/deploy_aca.ps1 `
     -Location japaneast `
     -ResourceGroupName rg-ragops-studio `
-    -AcrName <uniqueacrname> `
     -DiAuthMode identity `
     -DiResourceName <your-di-resource-name> `
-    -CuEndpoint "https://<your-cu>.cognitiveservices.azure.com/" `
     -CuAuthMode identity `
     -CuResourceName <your-cu-resource-name> `
     -StorageMode blob
 ```
 
-**Pattern 5: CU only (key auth)**
+**Bash (macOS / Linux):**
 
-```powershell
-./scripts/deploy_aca.ps1 `
-    -Location japaneast `
-    -ResourceGroupName rg-ragops-studio `
-    -AcrName <uniqueacrname> `
-    -CuEndpoint "https://<your-cu>.cognitiveservices.azure.com/" `
-    -CuKey "<your-cu-key>"
+```bash
+export DI_ENDPOINT="https://<your-di>.cognitiveservices.azure.com/"
+export CU_ENDPOINT="https://<your-cu>.cognitiveservices.azure.com/"
+
+./scripts/deploy_aca.sh \
+    --location japaneast \
+    --resource-group rg-ragops-studio \
+    --di-auth-mode identity \
+    --di-resource-name <your-di-resource-name> \
+    --cu-auth-mode identity \
+    --cu-resource-name <your-cu-resource-name> \
+    --storage-mode blob
 ```
 
-**Options**
+#### Pattern 5: CU only (key auth)
 
-| Parameter | Description |
-|---|---|
-| `-UploadsEnabled $true` | Enable uploads |
-| `-StorageAccountName "name"` | Explicit storage account name (auto-generated if omitted) |
-| `-StorageShareName "name"` | File share name (SMB mode, default: `appstorage`) |
-| `-StorageShareQuotaGiB 20` | File share size (SMB mode, default: 10 GiB) |
-| `-BlobContainerName "name"` | Blob container name (Blob mode, default: `appstorage`) |
-| `-DiAuthMode key\|identity` | DI authentication mode (default: `key`) |
-| `-DiResourceName "name"` | DI resource name (RBAC scope for identity mode) |
-| `-DiResourceGroupName "name"` | DI resource group (defaults to `-ResourceGroupName`) |
-| `-CuEndpoint "url"` | CU endpoint URL |
-| `-CuKey "key"` | CU API key (key mode) |
-| `-CuAuthMode key\|identity` | CU authentication mode (default: `key`) |
-| `-CuResourceName "name"` | CU resource name (RBAC scope for identity mode) |
-| `-CuResourceGroupName "name"` | CU resource group (defaults to `-ResourceGroupName`) |
+**PowerShell (Windows):**
+
+```powershell
+$env:CU_ENDPOINT = "https://<your-cu>.cognitiveservices.azure.com/"
+$env:CU_KEY = "<your-cu-key>"
+
+./scripts/deploy_aca.ps1 `
+    -Location japaneast `
+    -ResourceGroupName rg-ragops-studio
+```
+
+**Bash (macOS / Linux):**
+
+```bash
+export CU_ENDPOINT="https://<your-cu>.cognitiveservices.azure.com/"
+export CU_KEY="<your-cu-key>"
+
+./scripts/deploy_aca.sh \
+    --location japaneast \
+    --resource-group rg-ragops-studio
+```
+
+#### Options
+
+Only specify these when you need to override the defaults:
+
+| PowerShell | Bash | Default | Description |
+|---|---|---|---|
+| `-Location` | `--location` | `japaneast` | Azure region |
+| `-ResourceGroupName` | `--resource-group` | `rg-ragops-studio` | Resource group name |
+| `-AcrName` | `--acr-name` | `acrragopsstudio` | ACR name |
+| `-StorageShareName "name"` | `--storage-share name` | `appstorage` | File share name (SMB mode) |
+| `-StorageShareQuotaGiB 20` | `--storage-share-quota 20` | `10` | File share size in GiB (SMB mode) |
+| `-BlobContainerName "name"` | `--blob-container name` | `appstorage` | Blob container name (Blob mode) |
+| `-DiAuthMode key\|identity` | `--di-auth-mode key\|identity` | `key` | DI authentication mode |
+| `-DiResourceName "name"` | `--di-resource-name name` | — | DI resource name (RBAC scope for identity mode) |
+| `-DiResourceGroupName "name"` | `--di-resource-group name` | same as `--resource-group` | DI resource group |
+| `-CuAuthMode key\|identity` | `--cu-auth-mode key\|identity` | `key` | CU authentication mode |
+| `-CuResourceName "name"` | `--cu-resource-name name` | — | CU resource name (RBAC scope for identity mode) |
+| `-CuResourceGroupName "name"` | `--cu-resource-group name` | same as `--resource-group` | CU resource group |
 
 ### Update
 
 Re-run the same command to rebuild/push the image and update the Container App.
 
 - Usually you do NOT need to re-set endpoints/keys (secrets/env are kept).
-- To rotate keys, pass `-DiKey` / `-CuKey` to update secrets.
-- To switch auth mode, pass the new `-DiAuthMode` / `-CuAuthMode` value.
+- To rotate keys, pass `-DiKey` / `-CuKey` (bash: `--di-key` / `--cu-key`) to update secrets.
+- To switch auth mode, pass the new `-DiAuthMode` / `-CuAuthMode` (bash: `--di-auth-mode` / `--cu-auth-mode`) value.
 
 
 ## License

@@ -29,7 +29,7 @@ param(
     [string]$LogAnalyticsWorkspaceName = "law-ragops-studio",
 
     [Parameter(Mandatory = $false)]
-    [bool]$UploadsEnabled = $false,
+    [bool]$UploadsEnabled = $true,
 
     # === Persistent Storage Configuration (Azure Files) ===
     # Storage account name (auto-generated if not provided)
@@ -939,6 +939,7 @@ if (-not $saExists) {
         "--location", $Location,
         "--kind", "StorageV2",
         "--sku", "Standard_LRS",
+        "--min-tls-version", "TLS1_2",
         "--enable-large-file-share",
         "--allow-shared-key-access", "true",
         "--default-action", "Allow",
@@ -1164,6 +1165,7 @@ if (-not $saExists) {
         "--location", $Location,
         "--kind", "StorageV2",
         "--sku", "Standard_LRS",
+        "--min-tls-version", "TLS1_2",
         "--allow-shared-key-access", "false",
         "--default-action", "Allow",
         "--output", "none"
