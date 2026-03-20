@@ -755,7 +755,7 @@ form-action 'self'
 
 ### Upload Safety
 
-- Uploads disabled by default (`UPLOADS_ENABLED=false`).
+- Uploads enabled by default (`UPLOADS_ENABLED=true`).
 - `werkzeug.utils.secure_filename()` used for all file names.
 - Uploaded files stored as `{uuid}__{secure_filename}` — UUID prevents name collisions.
 
@@ -829,7 +829,7 @@ PowerShell script that automates the full deployment:
 | `STORAGE_BACKEND` | No | `local` | `local` / `blob` |
 | `AZURE_STORAGE_ACCOUNT_NAME` | Conditional | — | Required for blob mode |
 | `AZURE_STORAGE_CONTAINER_NAME` | No | `appstorage` | Blob container name |
-| `UPLOADS_ENABLED` | No | `false` | Enable file uploads (`true`/`false`) |
+| `UPLOADS_ENABLED` | No | `true` | Enable file uploads (`true`/`false`) |
 | `UI_DEFAULT_LANG` | No | `ja` | Default UI language (`ja`/`en`) |
 | `HOST` | No | `0.0.0.0` | Flask bind host |
 | `PORT` | No | `5000` (dev) / `8000` (container) | Flask bind port |
