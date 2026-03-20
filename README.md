@@ -65,6 +65,8 @@ All results are cached (file SHA-256 + model + options SHA-1), so you can iterat
 - Library view: lists cached files as cards, per-variant loading and deletion
 - **Result comparison mode (Semantic Diff)**: compare “Model A vs B” or “Option X vs Y” at a structural level with highlighted differences — evaluate downstream RAG impact before committing
 
+    ![image.png](./docs/images/002.png)
+
 ### User tabs (business scenario demo)
 - Place HTML files in `usertab/<lang>/` to auto-add custom tabs to the result panel (multi-language support)
 - **Demo-only feature**: displays static HTML mockups of AI agent execution results for various business scenarios. No actual agent invocation or dynamic processing is performed

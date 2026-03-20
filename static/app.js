@@ -3966,7 +3966,8 @@ async function loadLibrary() {
             dateSpan.className = 'library__variantDate';
             try {
               const d = new Date(v.savedAt);
-              dateSpan.textContent = d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+              const dateLoc = currentLang === 'ja' ? 'ja-JP' : 'en-US';
+              dateSpan.textContent = d.toLocaleString(dateLoc, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
             } catch {
               dateSpan.textContent = v.savedAt.slice(0, 16);
             }
