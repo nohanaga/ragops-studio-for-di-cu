@@ -1,0 +1,114 @@
+<!--tab-title: FSA リスク評価-->
+<!-- Header -->
+<div class="ut-header">
+  <span class="ut-header__icon">🏛️</span>
+  <span class="ut-header__title">金融庁リスク判定エージェント</span>
+  <span class="ut-badge ut-badge--high ut-badge--right">総合判定: 要注意</span>
+</div>
+
+<!-- Summary cards -->
+<div class="ut-cards">
+  <div class="ut-card ut-card--high">
+    <div class="ut-card__value">2</div>
+    <div class="ut-card__label">High Risk</div>
+  </div>
+  <div class="ut-card ut-card--medium">
+    <div class="ut-card__value">3</div>
+    <div class="ut-card__label">Medium Risk</div>
+  </div>
+  <div class="ut-card ut-card--low">
+    <div class="ut-card__value">1</div>
+    <div class="ut-card__label">Low Risk</div>
+  </div>
+  <div class="ut-card ut-card--total">
+    <div class="ut-card__value">6</div>
+    <div class="ut-card__label">検出総数</div>
+  </div>
+</div>
+
+<!-- Finding items list -->
+<div class="ut-section">
+  <div class="ut-section__title">🔍 検出されたリスク項目</div>
+  <ul class="ut-list">
+    <li class="ut-list-item">
+      <div class="ut-finding__header">
+        <span class="ut-badge ut-badge--high">HIGH</span>
+        <span class="ut-finding__title">反社会的勢力との取引疑義</span>
+      </div>
+      <div class="ut-finding__desc">
+        取引先企業の役員リストにおいて、反社会的勢力データベースとの照合で一致する可能性のある人物が検出されました。追加のデューデリジェンスが必要です。
+      </div>
+      <div class="ut-finding__ref">参照: 犯罪収益移転防止法 第4条 / 金融庁ガイドライン III-2-3-4</div>
+    </li>
+    <li class="ut-list-item">
+      <div class="ut-finding__header">
+        <span class="ut-badge ut-badge--high">HIGH</span>
+        <span class="ut-finding__title">マネー・ローンダリング懸念取引パターン</span>
+      </div>
+      <div class="ut-finding__desc">
+        過去6ヶ月の取引パターンにおいて、短期間での高頻度・小口送金が検出されました。構造化取引（ストラクチャリング）の疑いがあります。
+      </div>
+      <div class="ut-finding__ref">参照: FATF勧告 第20条 / 疑わしい取引の届出ガイドライン</div>
+    </li>
+    <li class="ut-list-item">
+      <div class="ut-finding__header">
+        <span class="ut-badge ut-badge--medium">MEDIUM</span>
+        <span class="ut-finding__title">KYC情報の不備</span>
+      </div>
+      <div class="ut-finding__desc">
+        顧客の本人確認書類について、提出された住所証明が有効期限切れ（6ヶ月超過）です。最新の書類による再確認が必要です。
+      </div>
+      <div class="ut-finding__ref">参照: 犯罪収益移転防止法施行規則 第6条</div>
+    </li>
+    <li class="ut-list-item">
+      <div class="ut-finding__header">
+        <span class="ut-badge ut-badge--medium">MEDIUM</span>
+        <span class="ut-finding__title">適合性原則違反の可能性</span>
+      </div>
+      <div class="ut-finding__desc">
+        顧客のリスク許容度（保守的）と推奨された金融商品（ハイリスク・デリバティブ）の間に不整合が見られます。適合性の再評価が推奨されます。
+      </div>
+      <div class="ut-finding__ref">参照: 金融商品取引法 第40条 / 監督指針 III-2-3-1</div>
+    </li>
+    <li class="ut-list-item">
+      <div class="ut-finding__header">
+        <span class="ut-badge ut-badge--medium">MEDIUM</span>
+        <span class="ut-finding__title">PEPs（重要な公的地位を有する者）関連取引</span>
+      </div>
+      <div class="ut-finding__desc">
+        取引相手の関係者が外国PEPsに該当する可能性があります。強化された顧客管理措置（EDD）の適用を検討してください。
+      </div>
+      <div class="ut-finding__ref">参照: FATF勧告 第12条 / 犯罪収益移転防止法 第4条第2項</div>
+    </li>
+    <li class="ut-list-item">
+      <div class="ut-finding__header">
+        <span class="ut-badge ut-badge--low">LOW</span>
+        <span class="ut-finding__title">取引記録の軽微な不備</span>
+      </div>
+      <div class="ut-finding__desc">
+        一部の取引記録において、取引目的の記載が汎用的な表現にとどまっており、より具体的な記録が望ましいと判断されます。
+      </div>
+      <div class="ut-finding__ref">参照: 犯罪収益移転防止法施行規則 第11条</div>
+    </li>
+  </ul>
+</div>
+
+<!-- Recommended actions -->
+<div class="ut-section">
+  <div class="ut-section__title">📋 推奨アクション</div>
+  <ul class="ut-list">
+    <li class="ut-list-item">
+      <strong>1. 即時対応</strong>: 反社会的勢力データベースとの照合結果について、コンプライアンス部門による精査を実施してください。
+    </li>
+    <li class="ut-list-item">
+      <strong>2. 48時間以内</strong>: 疑わしい取引パターンについて、疑わしい取引の届出（STR）の要否を判断してください。
+    </li>
+    <li class="ut-list-item">
+      <strong>3. 1週間以内</strong>: KYC情報の更新、適合性評価の再実施、EDD手続きの開始を行ってください。
+    </li>
+  </ul>
+</div>
+
+<div class="ut-footer">
+  分析実行日時: 2026-02-25 14:30:00 JST | AI Agent v1.2.0 | ※本結果は参考情報であり、最終判断は担当者が行ってください。
+</div>

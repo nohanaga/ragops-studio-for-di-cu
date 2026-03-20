@@ -1,0 +1,195 @@
+<!--tab-title: 文字バリデーション-->
+<!-- Header -->
+<div class="ut-header">
+  <span class="ut-header__icon">🔤</span>
+  <span class="ut-header__title">入力文字チェックエージェント</span>
+  <span class="ut-badge ut-badge--warn ut-badge--right">検出: 7件</span>
+</div>
+
+<!-- Summary cards -->
+<div class="ut-cards">
+  <div class="ut-card ut-card--total">
+    <div class="ut-card__value">1,284</div>
+    <div class="ut-card__label">総文字数</div>
+  </div>
+  <div class="ut-card ut-card--high">
+    <div class="ut-card__value">3</div>
+    <div class="ut-card__label">誤字・脱字</div>
+  </div>
+  <div class="ut-card ut-card--warn">
+    <div class="ut-card__value">2</div>
+    <div class="ut-card__label">表記ゆれ</div>
+  </div>
+  <div class="ut-card ut-card--ok">
+    <div class="ut-card__value">2</div>
+    <div class="ut-card__label">環境依存文字</div>
+  </div>
+</div>
+
+<!-- Check rule results -->
+<div class="ut-section">
+  <div class="ut-section__title">📏 適用ルール判定</div>
+  <ul class="ut-list">
+    <li class="ut-list-item ut-list-item--row">
+      <span class="ut-list-item__icon">🅰️</span>
+      <span class="ut-list-item__text">JIS第1・第2水準外の文字が含まれていないか</span>
+      <span class="ut-list-item__status ut-list-item__status--fail">NG（2件）</span>
+    </li>
+    <li class="ut-list-item ut-list-item--row">
+      <span class="ut-list-item__icon">🔁</span>
+      <span class="ut-list-item__text">全角・半角の混在ルール（数字は半角、カタカナは全角）</span>
+      <span class="ut-list-item__status ut-list-item__status--pass">OK</span>
+    </li>
+    <li class="ut-list-item ut-list-item--row">
+      <span class="ut-list-item__icon">📝</span>
+      <span class="ut-list-item__text">常用漢字外の使用チェック</span>
+      <span class="ut-list-item__status ut-list-item__status--warn">注意（1件）</span>
+    </li>
+    <li class="ut-list-item ut-list-item--row">
+      <span class="ut-list-item__icon">🔗</span>
+      <span class="ut-list-item__text">表記統一ルール（組織名・用語の統一）</span>
+      <span class="ut-list-item__status ut-list-item__status--fail">NG（2件）</span>
+    </li>
+    <li class="ut-list-item ut-list-item--row">
+      <span class="ut-list-item__icon">📐</span>
+      <span class="ut-list-item__text">句読点の統一（「、。」or「，．」）</span>
+      <span class="ut-list-item__status ut-list-item__status--pass">OK</span>
+    </li>
+    <li class="ut-list-item ut-list-item--row">
+      <span class="ut-list-item__icon">🈲</span>
+      <span class="ut-list-item__text">禁止文字・制御文字の混入チェック</span>
+      <span class="ut-list-item__status ut-list-item__status--pass">OK</span>
+    </li>
+  </ul>
+</div>
+
+<!-- Detection details table -->
+<div class="ut-section">
+  <div class="ut-section__title">🔍 検出された問題（7件）</div>
+  <table class="ut-table">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>種別</th>
+        <th>ページ / 行</th>
+        <th>検出内容</th>
+        <th>修正候補</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>1</td>
+        <td><span class="ut-badge ut-badge--high">誤字</span></td>
+        <td>P.1 / L.12</td>
+        <td>
+          <div class="ut-context">…契約の<span class="ut-hl ut-hl--wrong">締結</span>に際して…</div>
+        </td>
+        <td>
+          <span class="ut-hl ut-hl--correct">締結</span>
+          → OCR読取結果が <code>繥結</code> と誤認識。正しくは「締結」
+        </td>
+      </tr>
+      <tr>
+        <td>2</td>
+        <td><span class="ut-badge ut-badge--high">誤字</span></td>
+        <td>P.2 / L.5</td>
+        <td>
+          <div class="ut-context">…取締役会の<span class="ut-hl ut-hl--wrong">承認</span>を得た上で…</div>
+        </td>
+        <td>
+          <span class="ut-hl ut-hl--correct">承認</span>
+          → OCR結果が <code>承忍</code> と誤認識
+        </td>
+      </tr>
+      <tr>
+        <td>3</td>
+        <td><span class="ut-badge ut-badge--high">脱字</span></td>
+        <td>P.3 / L.22</td>
+        <td>
+          <div class="ut-context">…に基<span class="ut-hl ut-hl--wrong">づ</span>き、所定の手続…</div>
+        </td>
+        <td>
+          <span class="ut-hl ut-hl--correct">づき</span>
+          → 「基く」は誤り。「基づき」が正しい
+        </td>
+      </tr>
+      <tr>
+        <td>4</td>
+        <td><span class="ut-badge ut-badge--warn">表記ゆれ</span></td>
+        <td>P.1 / L.8, P.3 / L.15</td>
+        <td>
+          <div class="ut-context">
+            P.1: 「<span class="ut-hl ut-hl--wrong">サーバ</span>」<br/>
+            P.3: 「サーバー」
+          </div>
+        </td>
+        <td>
+          <span class="ut-hl ut-hl--correct">サーバー</span>
+          に統一（JIS Z 8301 準拠: 長音付与）
+        </td>
+      </tr>
+      <tr>
+        <td>5</td>
+        <td><span class="ut-badge ut-badge--warn">表記ゆれ</span></td>
+        <td>P.2 / L.18, P.4 / L.3</td>
+        <td>
+          <div class="ut-context">
+            P.2: 「<span class="ut-hl ut-hl--wrong">お問合せ</span>」<br/>
+            P.4: 「お問い合わせ」
+          </div>
+        </td>
+        <td>
+          <span class="ut-hl ut-hl--correct">お問い合わせ</span>
+          に統一を推奨
+        </td>
+      </tr>
+      <tr>
+        <td>6</td>
+        <td><span class="ut-badge ut-badge--info">環境依存</span></td>
+        <td>P.1 / L.3</td>
+        <td>
+          <div class="ut-context">…株式会社<span class="ut-hl ut-hl--wrong">㈱</span>ABC…</div>
+        </td>
+        <td>
+          <span class="ut-hl ut-hl--correct">（株）</span>
+          → U+3231 は JIS X 0208 外。括弧表記に置換推奨
+        </td>
+      </tr>
+      <tr>
+        <td>7</td>
+        <td><span class="ut-badge ut-badge--info">環境依存</span></td>
+        <td>P.4 / L.10</td>
+        <td>
+          <div class="ut-context">…令和<span class="ut-hl ut-hl--wrong">㋿</span>6年度…</div>
+        </td>
+        <td>
+          <span class="ut-hl ut-hl--correct">令和</span>
+          → U+32FF は環境依存。テキスト表記に置換推奨
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Recommended actions -->
+<div class="ut-section">
+  <div class="ut-section__title">📋 推奨アクション</div>
+  <ul class="ut-list">
+    <li class="ut-list-item ut-list-item--row">
+      <span class="ut-list-item__icon">1️⃣</span>
+      <span class="ut-list-item__text"><strong>OCR誤認識の修正</strong>: 「繥結→締結」「承忍→承認」をドキュメント上で訂正してください。原本との照合を推奨します。</span>
+    </li>
+    <li class="ut-list-item ut-list-item--row">
+      <span class="ut-list-item__icon">2️⃣</span>
+      <span class="ut-list-item__text"><strong>表記統一</strong>: 長音記号・送り仮名のルールを確認し、ドキュメント全体で統一してください。</span>
+    </li>
+    <li class="ut-list-item ut-list-item--row">
+      <span class="ut-list-item__icon">3️⃣</span>
+      <span class="ut-list-item__text"><strong>環境依存文字の置換</strong>: 他システム連携や印刷で文字化けの恐れがあります。JIS第1・第2水準範囲内の表記に修正してください。</span>
+    </li>
+  </ul>
+</div>
+
+<div class="ut-footer">
+  分析実行日時: 2026-02-25 14:45:00 JST | Character Check Agent v1.0.0 | 適用ルールセット: 公文書標準 v2.1 | ※本結果は参考情報です
+</div>
