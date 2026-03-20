@@ -755,7 +755,7 @@ form-action 'self'
 
 ### アップロード安全策
 
-- アップロードはデフォルトで無効 (`UPLOADS_ENABLED=false`)。
+- アップロードはデフォルトで有効 (`UPLOADS_ENABLED=true`)。
 - `werkzeug.utils.secure_filename()` を全ファイル名に使用。
 - アップロードファイルは `{uuid}__{secure_filename}` として保存 — UUID で名前衝突を防止。
 
@@ -829,7 +829,7 @@ form-action 'self'
 | `STORAGE_BACKEND` | いいえ | `local` | `local` / `blob` |
 | `AZURE_STORAGE_ACCOUNT_NAME` | 条件付き | — | Blob モード時に必要 |
 | `AZURE_STORAGE_CONTAINER_NAME` | いいえ | `appstorage` | Blob コンテナ名 |
-| `UPLOADS_ENABLED` | いいえ | `false` | ファイルアップロードの有効化（`true`/`false`） |
+| `UPLOADS_ENABLED` | いいえ | `true` | ファイルアップロードの有効化（`true`/`false`） |
 | `UI_DEFAULT_LANG` | いいえ | `ja` | デフォルト UI 言語（`ja`/`en`） |
 | `HOST` | いいえ | `0.0.0.0` | Flask バインドホスト |
 | `PORT` | いいえ | `5000` (dev) / `8000` (container) | Flask バインドポート |

@@ -76,7 +76,7 @@ RAGOps Studio は、この **解析品質の継続的な観測・比較・改善
 ### UX
 - 日本語 / 英語 の完全クライアントサイド切替（i18n）— ユーザータブも言語連動
 - 5 テーマ: Dark / Light / Midnight / Forest / Solarized
-- 安全策: 既定ではアップロード無効（`UPLOADS_ENABLED` で有効化）
+- 既定ではアップロード有効（`UPLOADS_ENABLED=false` で無効化可能）
 
 ### ストレージ
 - **ローカルモード** (`STORAGE_BACKEND=local`): `storage/` ディレクトリにファイル保存（デフォルト）
@@ -130,7 +130,7 @@ CU_KEY=<your-cu-key>
 # AZURE_STORAGE_CONTAINER_NAME=appstorage
 
 # UI
-# UPLOADS_ENABLED=false        # true でアップロード有効化
+# UPLOADS_ENABLED=true         # false でアップロード無効化
 # UI_DEFAULT_LANG=ja           # ja / en
 ```
 

@@ -76,10 +76,10 @@ def create_app() -> Flask:
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         return response
-
+    
     # Demo safety: disable uploads to avoid unintended changes by other users.
     # (Re-enable by editing this constant.)
-    UPLOADS_ENABLED = str(os.getenv("UPLOADS_ENABLED", "false")).strip().lower() in {"1", "true", "yes", "y", "on"}
+    UPLOADS_ENABLED = str(os.getenv("UPLOADS_ENABLED", "true")).strip().lower() in {"1", "true", "yes", "y", "on"}
 
     UI_DEFAULT_LANG = str(os.getenv("UI_DEFAULT_LANG", "ja")).strip().lower()
     if UI_DEFAULT_LANG not in {"ja", "en"}:

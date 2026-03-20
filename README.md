@@ -74,7 +74,7 @@ All results are cached (file SHA-256 + model + options SHA-1), so you can iterat
 ### UX
 - Full client-side Japanese / English switching (i18n) — user tabs language-synced
 - 5 themes: Dark / Light / Midnight / Forest / Solarized
-- Safety: uploads disabled by default (enable via `UPLOADS_ENABLED`)
+- Uploads enabled by default (disable via `UPLOADS_ENABLED=false`)
 
 ### Storage
 - **Local mode** (`STORAGE_BACKEND=local`): saves to `storage/` directory (default)
@@ -128,7 +128,7 @@ DI_KEY=<your-di-key>          # not needed for identity mode
 # AZURE_STORAGE_CONTAINER_NAME=appstorage
 
 # UI
-# UPLOADS_ENABLED=false        # set true to enable uploads
+# UPLOADS_ENABLED=true         # set false to disable uploads
 # UI_DEFAULT_LANG=ja           # ja / en
 ```
 
