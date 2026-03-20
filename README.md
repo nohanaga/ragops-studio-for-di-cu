@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="./static/icon.png" alt="RAGOps Studio for Document Intelligence / Content Understanding" width="240" height="240">
+</p>
+
 # RAGOps Studio for Document Intelligence / Content Understanding
 
 ![Azure DI](https://img.shields.io/badge/Azure-Document%20Intelligence-0078D4?style=flat-square&logo=microsoft-azure)
