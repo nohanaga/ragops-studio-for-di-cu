@@ -1,0 +1,193 @@
+<!--tab-title: Legal Clause Check-->
+<!-- Header -->
+<div class="ut-header">
+  <span class="ut-header__icon">⚖️</span>
+  <span class="ut-header__title">Legal Clause Check Agent</span>
+  <span class="ut-badge ut-badge--critical ut-badge--right">Requires Fix: 3 items</span>
+</div>
+
+<!-- Summary cards -->
+<div class="ut-cards">
+  <div class="ut-card ut-card--total">
+    <div class="ut-card__value">24</div>
+    <div class="ut-card__label">Clauses Checked</div>
+  </div>
+  <div class="ut-card ut-card--critical">
+    <div class="ut-card__value">3</div>
+    <div class="ut-card__label">Critical Issues</div>
+  </div>
+  <div class="ut-card ut-card--warn">
+    <div class="ut-card__value">4</div>
+    <div class="ut-card__label">Warnings</div>
+  </div>
+  <div class="ut-card ut-card--pass">
+    <div class="ut-card__value">17</div>
+    <div class="ut-card__label">No Issues</div>
+  </div>
+</div>
+
+<!-- Required clause checklist -->
+<div class="ut-section">
+  <div class="ut-section__title">📋 Required Clause Checklist</div>
+  <ul class="ut-list">
+    <li class="ut-list-item ut-list-item--row">
+      <span class="ut-list-item__icon">📄</span>
+      <span class="ut-list-item__text">Identification of contracting parties (Party A / Party B definitions)</span>
+      <span class="ut-list-item__status ut-list-item__status--pass">✔ OK</span>
+    </li>
+    <li class="ut-list-item ut-list-item--row">
+      <span class="ut-list-item__icon">📅</span>
+      <span class="ut-list-item__text">Contract term and renewal conditions</span>
+      <span class="ut-list-item__status ut-list-item__status--fail">✘ Deficient</span>
+    </li>
+    <li class="ut-list-item ut-list-item--row">
+      <span class="ut-list-item__icon">💰</span>
+      <span class="ut-list-item__text">Consideration and payment terms</span>
+      <span class="ut-list-item__status ut-list-item__status--pass">✔ OK</span>
+    </li>
+    <li class="ut-list-item ut-list-item--row">
+      <span class="ut-list-item__icon">🔒</span>
+      <span class="ut-list-item__text">Confidentiality clause (NDA clause)</span>
+      <span class="ut-list-item__status ut-list-item__status--pass">✔ OK</span>
+    </li>
+    <li class="ut-list-item ut-list-item--row">
+      <span class="ut-list-item__icon">⚠️</span>
+      <span class="ut-list-item__text">Damages and limitation of liability clause</span>
+      <span class="ut-list-item__status ut-list-item__status--fail">✘ Deficient</span>
+    </li>
+    <li class="ut-list-item ut-list-item--row">
+      <span class="ut-list-item__icon">🚪</span>
+      <span class="ut-list-item__text">Termination and cancellation clause</span>
+      <span class="ut-list-item__status ut-list-item__status--warn">⚠ Review Needed</span>
+    </li>
+    <li class="ut-list-item ut-list-item--row">
+      <span class="ut-list-item__icon">🏛️</span>
+      <span class="ut-list-item__text">Governing law and jurisdiction</span>
+      <span class="ut-list-item__status ut-list-item__status--fail">✘ Deficient</span>
+    </li>
+    <li class="ut-list-item ut-list-item--row">
+      <span class="ut-list-item__icon">🚫</span>
+      <span class="ut-list-item__text">Anti-social forces exclusion clause</span>
+      <span class="ut-list-item__status ut-list-item__status--pass">✔ OK</span>
+    </li>
+    <li class="ut-list-item ut-list-item--row">
+      <span class="ut-list-item__icon">🔄</span>
+      <span class="ut-list-item__text">Force Majeure clause</span>
+      <span class="ut-list-item__status ut-list-item__status--warn">⚠ Review Needed</span>
+    </li>
+    <li class="ut-list-item ut-list-item--row">
+      <span class="ut-list-item__icon">📝</span>
+      <span class="ut-list-item__text">Intellectual property ownership</span>
+      <span class="ut-list-item__status ut-list-item__status--pass">✔ OK</span>
+    </li>
+  </ul>
+</div>
+
+<!-- Detected issues -->
+<div class="ut-section">
+  <div class="ut-section__title">🔍 Detected Issues (Critical: 3 / Warning: 4)</div>
+  <table class="ut-table">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Severity</th>
+        <th>Clause</th>
+        <th>Issue Details</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>1</td>
+        <td><span class="ut-badge ut-badge--critical">Critical</span></td>
+        <td>Article 5 (Contract Term)</td>
+        <td>
+          <div>The auto-renewal clause lacks a <strong>notice deadline for renewal refusal</strong>. This raises concerns about consistency with mandatory provisions such as the Land and Building Lease Act.</div>
+          <div class="ut-clause ut-clause--critical">
+            "The effective period of this agreement shall be one year from the date of execution, and <mark>shall be automatically renewed upon expiration</mark>."
+          </div>
+          <div class="ut-finding__desc">→ A renewal refusal notice deadline (e.g., 30 days before expiration) must be added</div>
+        </td>
+      </tr>
+      <tr>
+        <td>2</td>
+        <td><span class="ut-badge ut-badge--critical">Critical</span></td>
+        <td>Article 12 (Damages)</td>
+        <td>
+          <div>No cap on damages is specified, creating a risk of <strong>unlimited liability</strong>.</div>
+          <div class="ut-clause ut-clause--critical">
+            "Party B shall <mark>compensate all damages</mark> arising from a breach of this agreement by Party A."
+          </div>
+          <div class="ut-finding__desc">→ A limitation clause such as "up to the total consideration paid by Party A to Party B under this agreement" should be added</div>
+        </td>
+      </tr>
+      <tr>
+        <td>3</td>
+        <td><span class="ut-badge ut-badge--critical">Critical</span></td>
+        <td>— (No clause)</td>
+        <td>
+          <div>No <strong>governing law or jurisdiction</strong> provision exists anywhere in the contract. This creates a risk of jurisdictional disputes in case of conflict.</div>
+          <div class="ut-finding__desc">→ A clause such as "This agreement shall be governed by the laws of Japan, and the Tokyo District Court shall have exclusive jurisdiction as the court of first instance" should be added</div>
+        </td>
+      </tr>
+      <tr>
+        <td>4</td>
+        <td><span class="ut-badge ut-badge--warn">Warning</span></td>
+        <td>Article 8 (Termination)</td>
+        <td>
+          <div>Termination grounds are listed exhaustively, but a <strong>general breach of trust clause</strong> is missing.</div>
+          <div class="ut-clause ut-clause--warn">
+            "Party A may terminate this agreement <mark class="ut-mark--warn">without prior notice</mark> if Party B falls under any of the following."
+          </div>
+          <div class="ut-finding__desc">→ Adding a general clause such as "any other action that significantly damages the relationship of trust" is recommended</div>
+        </td>
+      </tr>
+      <tr>
+        <td>5</td>
+        <td><span class="ut-badge ut-badge--warn">Warning</span></td>
+        <td>Article 15 (Force Majeure)</td>
+        <td>
+          <div>The definition of force majeure does not include <strong>epidemics/pandemics</strong>.</div>
+          <div class="ut-finding__desc">→ Adding "epidemics, spread of infectious diseases" to force majeure events is recommended</div>
+        </td>
+      </tr>
+      <tr>
+        <td>6</td>
+        <td><span class="ut-badge ut-badge--warn">Warning</span></td>
+        <td>Article 3 (Outsourced Services)</td>
+        <td>
+          <div>The subcontracting provision only requires <strong>prior written consent</strong>, leaving management responsibility for subcontractors unclear.</div>
+          <div class="ut-finding__desc">→ Adding a joint liability clause requiring subcontractors to bear equivalent obligations is recommended</div>
+        </td>
+      </tr>
+      <tr>
+        <td>7</td>
+        <td><span class="ut-badge ut-badge--warn">Warning</span></td>
+        <td>Article 10 (Confidentiality)</td>
+        <td>
+          <div>The <strong>survival period</strong> of confidentiality obligations states only "after termination of this agreement" without specifying a concrete timeframe.</div>
+          <div class="ut-finding__desc">→ A specific survival period such as "3 years after termination" should be specified</div>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Recommended actions -->
+<div class="ut-section">
+  <div class="ut-section__title">📌 Recommended Actions (by Priority)</div>
+  <ul class="ut-list">
+    <li class="ut-list-item">
+      <strong>1. Immediate (Critical)</strong>: Set a damages cap and add a governing law/jurisdiction clause. These are directly linked to the contract's validity and enforceability.
+    </li>
+    <li class="ut-list-item">
+      <strong>2. Urgent</strong>: Add a renewal refusal notice deadline to the auto-renewal clause. If applicable to consumer contracts, verify consistency with the Consumer Contract Act.
+    </li>
+    <li class="ut-list-item">
+      <strong>3. Next Revision</strong>: Expand termination grounds, update force majeure definition, clarify subcontractor management responsibility, and specify the confidentiality survival period.
+    </li>
+  </ul>
+</div>
+
+<div class="ut-footer">
+  Analysis date: 2026-02-25 15:00:00 JST | Legal Clause Agent v1.1.0 | Applicable jurisdiction: Japanese law | * This is not legal advice. Consult your legal department or attorney for final decisions.
+</div>

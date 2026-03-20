@@ -1,0 +1,194 @@
+<!--tab-title: Character Validation-->
+<!-- Header -->
+<div class="ut-header">
+  <span class="ut-header__icon">🔤</span>
+  <span class="ut-header__title">Character Validation Agent</span>
+  <span class="ut-badge ut-badge--warn ut-badge--right">Detected: 7 issues</span>
+</div>
+
+<!-- Summary cards -->
+<div class="ut-cards">
+  <div class="ut-card ut-card--total">
+    <div class="ut-card__value">1,284</div>
+    <div class="ut-card__label">Total Characters</div>
+  </div>
+  <div class="ut-card ut-card--high">
+    <div class="ut-card__value">3</div>
+    <div class="ut-card__label">Typos / Omissions</div>
+  </div>
+  <div class="ut-card ut-card--warn">
+    <div class="ut-card__value">2</div>
+    <div class="ut-card__label">Notation Inconsistency</div>
+  </div>
+  <div class="ut-card ut-card--ok">
+    <div class="ut-card__value">2</div>
+    <div class="ut-card__label">Platform-Dependent Chars</div>
+  </div>
+</div>
+
+<!-- Check rule results -->
+<div class="ut-section">
+  <div class="ut-section__title">📏 Rule Check Results</div>
+  <ul class="ut-list">
+    <li class="ut-list-item ut-list-item--row">
+      <span class="ut-list-item__icon">🅰️</span>
+      <span class="ut-list-item__text">Characters outside JIS Level 1 & 2</span>
+      <span class="ut-list-item__status ut-list-item__status--fail">FAIL (2)</span>
+    </li>
+    <li class="ut-list-item ut-list-item--row">
+      <span class="ut-list-item__icon">🔁</span>
+      <span class="ut-list-item__text">Fullwidth/halfwidth mixing rules (digits: halfwidth, katakana: fullwidth)</span>
+      <span class="ut-list-item__status ut-list-item__status--pass">OK</span>
+    </li>
+    <li class="ut-list-item ut-list-item--row">
+      <span class="ut-list-item__icon">📝</span>
+      <span class="ut-list-item__text">Non-standard kanji usage check</span>
+      <span class="ut-list-item__status ut-list-item__status--warn">Warning (1)</span>
+    </li>
+    <li class="ut-list-item ut-list-item--row">
+      <span class="ut-list-item__icon">🔗</span>
+      <span class="ut-list-item__text">Notation consistency rules (organization names, terminology)</span>
+      <span class="ut-list-item__status ut-list-item__status--fail">FAIL (2)</span>
+    </li>
+    <li class="ut-list-item ut-list-item--row">
+      <span class="ut-list-item__icon">📐</span>
+      <span class="ut-list-item__text">Punctuation consistency</span>
+      <span class="ut-list-item__status ut-list-item__status--pass">OK</span>
+    </li>
+    <li class="ut-list-item ut-list-item--row">
+      <span class="ut-list-item__icon">🈲</span>
+      <span class="ut-list-item__text">Prohibited / control character check</span>
+      <span class="ut-list-item__status ut-list-item__status--pass">OK</span>
+    </li>
+  </ul>
+</div>
+
+<!-- Detection details table -->
+<div class="ut-section">
+  <div class="ut-section__title">🔍 Detected Issues (7)</div>
+  <table class="ut-table">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Type</th>
+        <th>Page / Line</th>
+        <th>Detected Content</th>
+        <th>Suggested Fix</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>1</td>
+        <td><span class="ut-badge ut-badge--high">Typo</span></td>
+        <td>P.1 / L.12</td>
+        <td>
+          <div class="ut-context">...upon the <span class="ut-hl ut-hl--wrong">conclusion</span> of the contract...</div>
+        </td>
+        <td>
+          <span class="ut-hl ut-hl--correct">締結 (conclusion)</span>
+          → OCR misrecognized as <code>繥結</code>. Correct reading is "締結"
+        </td>
+      </tr>
+      <tr>
+        <td>2</td>
+        <td><span class="ut-badge ut-badge--high">Typo</span></td>
+        <td>P.2 / L.5</td>
+        <td>
+          <div class="ut-context">...with the <span class="ut-hl ut-hl--wrong">approval</span> of the board of directors...</div>
+        </td>
+        <td>
+          <span class="ut-hl ut-hl--correct">承認 (approval)</span>
+          → OCR misrecognized as <code>承忍</code>
+        </td>
+      </tr>
+      <tr>
+        <td>3</td>
+        <td><span class="ut-badge ut-badge--high">Omission</span></td>
+        <td>P.3 / L.22</td>
+        <td>
+          <div class="ut-context">...<span class="ut-hl ut-hl--wrong">based</span> on the prescribed procedures...</div>
+        </td>
+        <td>
+          <span class="ut-hl ut-hl--correct">基づき (based on)</span>
+          → "基く" is incorrect. The correct form is "基づき"
+        </td>
+      </tr>
+      <tr>
+        <td>4</td>
+        <td><span class="ut-badge ut-badge--warn">Inconsistency</span></td>
+        <td>P.1 / L.8, P.3 / L.15</td>
+        <td>
+          <div class="ut-context">
+            P.1: "<span class="ut-hl ut-hl--wrong">サーバ</span>"<br/>
+            P.3: "サーバー"
+          </div>
+        </td>
+        <td>
+          Standardize to <span class="ut-hl ut-hl--correct">サーバー</span>
+          (JIS Z 8301 compliant: with long vowel mark)
+        </td>
+      </tr>
+      <tr>
+        <td>5</td>
+        <td><span class="ut-badge ut-badge--warn">Inconsistency</span></td>
+        <td>P.2 / L.18, P.4 / L.3</td>
+        <td>
+          <div class="ut-context">
+            P.2: "<span class="ut-hl ut-hl--wrong">お問合せ</span>"<br/>
+            P.4: "お問い合わせ"
+          </div>
+        </td>
+        <td>
+          Recommend standardizing to <span class="ut-hl ut-hl--correct">お問い合わせ</span>
+        </td>
+      </tr>
+      <tr>
+        <td>6</td>
+        <td><span class="ut-badge ut-badge--info">Platform-Dependent</span></td>
+        <td>P.1 / L.3</td>
+        <td>
+          <div class="ut-context">...Corporation<span class="ut-hl ut-hl--wrong">㈱</span>ABC...</div>
+        </td>
+        <td>
+          <span class="ut-hl ut-hl--correct">（株）</span>
+          → U+3231 is outside JIS X 0208. Replace with parenthesized notation
+        </td>
+      </tr>
+      <tr>
+        <td>7</td>
+        <td><span class="ut-badge ut-badge--info">Platform-Dependent</span></td>
+        <td>P.4 / L.10</td>
+        <td>
+          <div class="ut-context">...Reiwa<span class="ut-hl ut-hl--wrong">㋿</span> Year 6...</div>
+        </td>
+        <td>
+          <span class="ut-hl ut-hl--correct">令和</span>
+          → U+32FF is platform-dependent. Replace with text notation
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Recommended actions -->
+<div class="ut-section">
+  <div class="ut-section__title">📋 Recommended Actions</div>
+  <ul class="ut-list">
+    <li class="ut-list-item ut-list-item--row">
+      <span class="ut-list-item__icon">1️⃣</span>
+      <span class="ut-list-item__text"><strong>Fix OCR misrecognitions</strong>: Correct "繥結→締結" and "承忍→承認" in the document. Cross-reference with the original is recommended.</span>
+    </li>
+    <li class="ut-list-item ut-list-item--row">
+      <span class="ut-list-item__icon">2️⃣</span>
+      <span class="ut-list-item__text"><strong>Standardize notation</strong>: Review long vowel mark and okurigana rules and apply consistently across the entire document.</span>
+    </li>
+    <li class="ut-list-item ut-list-item--row">
+      <span class="ut-list-item__icon">3️⃣</span>
+      <span class="ut-list-item__text"><strong>Replace platform-dependent characters</strong>: These may cause garbled text in cross-system integration or printing. Replace with JIS Level 1 & 2 compliant notation.</span>
+    </li>
+  </ul>
+</div>
+
+<div class="ut-footer">
+  Analysis date: 2026-02-25 14:45:00 JST | Character Check Agent v1.0.0 | Ruleset: Official Document Standard v2.1 | * Results are for reference only
+</div>

@@ -1,0 +1,193 @@
+<!--tab-title: 法的条項チェック-->
+<!-- Header -->
+<div class="ut-header">
+  <span class="ut-header__icon">⚖️</span>
+  <span class="ut-header__title">法的条項チェックエージェント</span>
+  <span class="ut-badge ut-badge--critical ut-badge--right">要修正: 3件</span>
+</div>
+
+<!-- Summary cards -->
+<div class="ut-cards">
+  <div class="ut-card ut-card--total">
+    <div class="ut-card__value">24</div>
+    <div class="ut-card__label">検査条項数</div>
+  </div>
+  <div class="ut-card ut-card--critical">
+    <div class="ut-card__value">3</div>
+    <div class="ut-card__label">重大な問題</div>
+  </div>
+  <div class="ut-card ut-card--warn">
+    <div class="ut-card__value">4</div>
+    <div class="ut-card__label">注意</div>
+  </div>
+  <div class="ut-card ut-card--pass">
+    <div class="ut-card__value">17</div>
+    <div class="ut-card__label">問題なし</div>
+  </div>
+</div>
+
+<!-- Required clause checklist -->
+<div class="ut-section">
+  <div class="ut-section__title">📋 必須条項チェックリスト</div>
+  <ul class="ut-list">
+    <li class="ut-list-item ut-list-item--row">
+      <span class="ut-list-item__icon">📄</span>
+      <span class="ut-list-item__text">契約当事者の明記（甲・乙の定義）</span>
+      <span class="ut-list-item__status ut-list-item__status--pass">✔ OK</span>
+    </li>
+    <li class="ut-list-item ut-list-item--row">
+      <span class="ut-list-item__icon">📅</span>
+      <span class="ut-list-item__text">契約期間・更新条件の定め</span>
+      <span class="ut-list-item__status ut-list-item__status--fail">✘ 不備</span>
+    </li>
+    <li class="ut-list-item ut-list-item--row">
+      <span class="ut-list-item__icon">💰</span>
+      <span class="ut-list-item__text">対価・支払条件の明記</span>
+      <span class="ut-list-item__status ut-list-item__status--pass">✔ OK</span>
+    </li>
+    <li class="ut-list-item ut-list-item--row">
+      <span class="ut-list-item__icon">🔒</span>
+      <span class="ut-list-item__text">秘密保持条項（NDA条項）</span>
+      <span class="ut-list-item__status ut-list-item__status--pass">✔ OK</span>
+    </li>
+    <li class="ut-list-item ut-list-item--row">
+      <span class="ut-list-item__icon">⚠️</span>
+      <span class="ut-list-item__text">損害賠償・責任制限条項</span>
+      <span class="ut-list-item__status ut-list-item__status--fail">✘ 不備</span>
+    </li>
+    <li class="ut-list-item ut-list-item--row">
+      <span class="ut-list-item__icon">🚪</span>
+      <span class="ut-list-item__text">解除・解約条項</span>
+      <span class="ut-list-item__status ut-list-item__status--warn">⚠ 要確認</span>
+    </li>
+    <li class="ut-list-item ut-list-item--row">
+      <span class="ut-list-item__icon">🏛️</span>
+      <span class="ut-list-item__text">準拠法・管轄裁判所</span>
+      <span class="ut-list-item__status ut-list-item__status--fail">✘ 不備</span>
+    </li>
+    <li class="ut-list-item ut-list-item--row">
+      <span class="ut-list-item__icon">🚫</span>
+      <span class="ut-list-item__text">反社会的勢力排除条項</span>
+      <span class="ut-list-item__status ut-list-item__status--pass">✔ OK</span>
+    </li>
+    <li class="ut-list-item ut-list-item--row">
+      <span class="ut-list-item__icon">🔄</span>
+      <span class="ut-list-item__text">不可抗力条項（Force Majeure）</span>
+      <span class="ut-list-item__status ut-list-item__status--warn">⚠ 要確認</span>
+    </li>
+    <li class="ut-list-item ut-list-item--row">
+      <span class="ut-list-item__icon">📝</span>
+      <span class="ut-list-item__text">知的財産権の帰属</span>
+      <span class="ut-list-item__status ut-list-item__status--pass">✔ OK</span>
+    </li>
+  </ul>
+</div>
+
+<!-- Detected issues -->
+<div class="ut-section">
+  <div class="ut-section__title">🔍 検出された問題（重大: 3件 / 注意: 4件）</div>
+  <table class="ut-table">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>深刻度</th>
+        <th>条項</th>
+        <th>問題内容</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>1</td>
+        <td><span class="ut-badge ut-badge--critical">重大</span></td>
+        <td>第5条（契約期間）</td>
+        <td>
+          <div>自動更新条項に<strong>更新拒絶の通知期限</strong>が未記載です。借地借家法等の強行規定との整合性に問題があります。</div>
+          <div class="ut-clause ut-clause--critical">
+            「本契約の有効期間は締結日より1年間とし、<mark>期間満了時に自動的に更新</mark>されるものとする。」
+          </div>
+          <div class="ut-finding__desc">→ 更新拒絶の通知期限（例: 期間満了の30日前まで）の追加が必要</div>
+        </td>
+      </tr>
+      <tr>
+        <td>2</td>
+        <td><span class="ut-badge ut-badge--critical">重大</span></td>
+        <td>第12条（損害賠償）</td>
+        <td>
+          <div>賠償上限額の定めがなく、<strong>無制限の賠償責任</strong>を負うリスクがあります。</div>
+          <div class="ut-clause ut-clause--critical">
+            「乙は、本契約に違反したことにより甲に生じた<mark>一切の損害を賠償する</mark>ものとする。」
+          </div>
+          <div class="ut-finding__desc">→ 「本契約に基づき甲が乙に支払った対価の総額を上限として」等の制限条項を追加すべき</div>
+        </td>
+      </tr>
+      <tr>
+        <td>3</td>
+        <td><span class="ut-badge ut-badge--critical">重大</span></td>
+        <td>—（条項なし）</td>
+        <td>
+          <div><strong>準拠法および管轄裁判所の定め</strong>が契約書全体に存在しません。紛争発生時に管轄争いが生じるリスクがあります。</div>
+          <div class="ut-finding__desc">→ 「本契約は日本法に準拠し、東京地方裁判所を第一審の専属的合意管轄裁判所とする。」等の条項追加が必要</div>
+        </td>
+      </tr>
+      <tr>
+        <td>4</td>
+        <td><span class="ut-badge ut-badge--warn">注意</span></td>
+        <td>第8条（解除）</td>
+        <td>
+          <div>解除事由が限定列挙されていますが、<strong>包括的な信頼関係破壊条項</strong>がありません。</div>
+          <div class="ut-clause ut-clause--warn">
+            「甲は、乙が次の各号に該当する場合、<mark class="ut-mark--warn">催告なく</mark>本契約を解除できる。」
+          </div>
+          <div class="ut-finding__desc">→ 「その他信頼関係を著しく損なう行為があった場合」等の一般条項の追加を推奨</div>
+        </td>
+      </tr>
+      <tr>
+        <td>5</td>
+        <td><span class="ut-badge ut-badge--warn">注意</span></td>
+        <td>第15条（不可抗力）</td>
+        <td>
+          <div>不可抗力の定義に<strong>感染症・パンデミック</strong>が含まれていません。</div>
+          <div class="ut-finding__desc">→ 「疫病、感染症の蔓延」を不可抗力事由に追加を推奨</div>
+        </td>
+      </tr>
+      <tr>
+        <td>6</td>
+        <td><span class="ut-badge ut-badge--warn">注意</span></td>
+        <td>第3条（委託業務）</td>
+        <td>
+          <div>再委託に関する定めが<strong>書面による事前承諾</strong>のみで、再委託先の管理責任が不明確です。</div>
+          <div class="ut-finding__desc">→ 再委託先にも同等の義務を負わせる旨の連帯責任条項の追加を推奨</div>
+        </td>
+      </tr>
+      <tr>
+        <td>7</td>
+        <td><span class="ut-badge ut-badge--warn">注意</span></td>
+        <td>第10条（秘密保持）</td>
+        <td>
+          <div>秘密保持義務の<strong>存続期間</strong>が「本契約終了後も」のみで具体的年数が未定です。</div>
+          <div class="ut-finding__desc">→ 「本契約終了後3年間」等の具体的な存続期間を明記すべき</div>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Recommended actions -->
+<div class="ut-section">
+  <div class="ut-section__title">📌 推奨アクション（優先度順）</div>
+  <ul class="ut-list">
+    <li class="ut-list-item">
+      <strong>1. 即時対応（重大）</strong>: 損害賠償条項に上限額を設定し、準拠法・管轄裁判所条項を新設してください。これらは契約の有効性・執行可能性に直結します。
+    </li>
+    <li class="ut-list-item">
+      <strong>2. 早急に対応</strong>: 自動更新条項に更新拒絶通知期限を追記してください。消費者契約の場合、消費者契約法との整合性も確認が必要です。
+    </li>
+    <li class="ut-list-item">
+      <strong>3. 次回改訂時</strong>: 解除事由の拡充、不可抗力定義の更新、再委託管理責任の明確化、秘密保持存続期間の具体化を行ってください。
+    </li>
+  </ul>
+</div>
+
+<div class="ut-footer">
+  分析実行日時: 2026-02-25 15:00:00 JST | Legal Clause Agent v1.1.0 | 適用法域: 日本法 | ※本結果は法的助言ではありません。最終判断は法務部門・弁護士にご相談ください。
+</div>

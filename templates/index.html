@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="{{ default_lang }}">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title id="pageTitle">RAGOps Studio</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+  <link rel="stylesheet" href="/static/usertab.css" />
+  <script nonce="{{ csp_nonce }}">
+    window.__APP_CONFIG__ = {
+      uploadsEnabled: {{ 'true' if uploads_enabled else 'false' }},
+      defaultLang: "{{ default_lang }}",
+      cuEnabled: {{ 'true' if cu_enabled else 'false' }}
+    };
+  </script>
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <div class="header__title" id="appHeaderTitle">RAGOps Studio</div>
+      <div class="header__right">
+        <div class="header__status" id="statusText" data-i18n="status.ready">Ready</div>
+
+        <div class="menu" id="langMenu">
+          <button id="langMenuBtn" class="btn btn--small btn--ghost" type="button" aria-haspopup="menu" aria-expanded="false">
+            <span data-i18n="header.language">Language</span>: <span id="langMenuLabel">English</span>
+          </button>
+          <div class="menu__panel" id="langMenuPanel" role="menu" aria-label="Language" data-i18n-aria-label="header.language" hidden>
+            <button class="menu__item" type="button" role="menuitem" data-lang="ja">日本語</button>
+            <button class="menu__item" type="button" role="menuitem" data-lang="en">English</button>
+          </div>
+        </div>
+
+        <div class="menu" id="themeMenu">
+          <button id="themeMenuBtn" class="btn btn--small btn--ghost" type="button" aria-haspopup="menu" aria-expanded="false">
+            <span data-i18n="header.theme">Theme</span>: <span id="themeMenuLabel">Dark</span>
+          </button>
+          <div class="menu__panel" id="themeMenuPanel" role="menu" aria-label="Theme" data-i18n-aria-label="header.theme" hidden>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="main" id="mainRoot">
+      <div class="main-tabs" id="mainTabs" role="tablist" aria-label="Main view" data-i18n-aria-label="main.tabs.aria" hidden>
+        <button class="main-tab main-tab--active" type="button" role="tab" aria-selected="true" aria-controls="main-pane-input" data-main-tab="input" data-i18n="main.tabs.input">入力 / モデル</button>
+        <button class="main-tab" type="button" role="tab" aria-selected="false" aria-controls="main-pane-preview" data-main-tab="preview" data-i18n="main.tabs.preview">プレビュー</button>
+        <button class="main-tab" type="button" role="tab" aria-selected="false" aria-controls="main-pane-results" data-main-tab="results" data-i18n="main.tabs.results">結果</button>
+      </div>
+
+      <section class="pane pane--left" id="main-pane-input" data-main-pane="input" role="tabpanel" aria-label="Input / Model" data-i18n-aria-label="pane.input.aria">
+        <div class="pane__header">
+          <h2 class="pane__title" data-i18n="pane.input.title">入力 / モデル</h2>
+          <button id="analyzeBtn" class="btn btn--primary" type="button" disabled data-i18n="action.analyze">Analyze</button>
+        </div>
+
+        <div class="service-selector" id="serviceSelector">
+          <button class="service-btn service-btn--active" type="button" data-service="di" data-i18n="service.di">Document Intelligence</button>
+          <button class="service-btn" type="button" data-service="cu" data-i18n="service.cu">Content Understanding</button>
+        </div>
+
+        <div class="tabs tabs--input" id="inputPaneTabs" role="tablist" aria-label="Input pane tabs" data-i18n-aria-label="input.tabs.aria">
+          <button class="tab tab--active" type="button" role="tab" aria-selected="true" aria-controls="input-tab-work" data-input-tab="work" data-i18n="input.tabs.work">入力</button>
+          <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="input-tab-library" data-input-tab="library" data-i18n="input.tabs.library">キャッシュ</button>
+        </div>
+
+        <div class="input-tabpane input-tabpane--active" id="input-tab-work" role="tabpanel" aria-label="Input" data-i18n-aria-label="input.tabs.work">
+
+        <div class="box">
+          <div class="field">
+            <label class="field__label" data-i18n="field.file">ファイル</label>
+            <div class="upload-control">
+              <div id="uploadDropzone" class="upload-dropzone" role="button" tabindex="0" aria-label="Select a file" data-i18n-aria-label="dropzone.aria" {% if not uploads_enabled %}aria-disabled="true"{% endif %}>
+                <input id="fileInput" class="upload-dropzone__input" type="file" accept="application/pdf,image/*,audio/*,video/*,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.presentationml.presentation" aria-label="Choose file" data-i18n-aria-label="dropzone.input.aria" {% if not uploads_enabled %}disabled{% endif %} />
+                <div class="upload-dropzone__body">
+                  <div class="upload-dropzone__title" data-i18n="dropzone.title">ファイルをドロップまたはクリック</div>
+                  <div class="upload-dropzone__hint" data-i18n="dropzone.hint">PDF / 画像を選択してください</div>
+                </div>
+              </div>
+              <button id="uploadBtn" class="btn" type="button" {% if not uploads_enabled %}disabled{% endif %} data-i18n="action.upload">Upload</button>
+            </div>
+            <div class="hint" id="fileInfo"></div>
+          </div>
+
+          <div class="field">
+            <label class="field__label" data-i18n="field.model">モデル</label>
+            <!-- Rich model picker -->
+            <div id="modelPicker" class="model-picker">
+              <button id="modelPickerBtn" class="model-picker__btn" type="button">
+                <span id="modelPickerLabel">…</span>
+                <span class="model-picker__arrow">▾</span>
+              </button>
+              <div id="modelPickerDropdown" class="model-picker__dropdown">
+                <input id="modelFilterInput" class="model-picker__filter" type="text" placeholder="モデルを検索…" data-i18n-placeholder="model.filter.placeholder" autocomplete="off" />
+                <label class="model-picker__us-toggle">
+                  <input id="modelUsCheckbox" type="checkbox" />
+                  <span data-i18n="model.showUs">米国専用モデルを表示</span>
+                </label>
+                <div id="modelPickerList" class="model-picker__list"></div>
+              </div>
+            </div>
+            <!-- Hidden backing select for getModelId() compatibility -->
+            <select id="modelSelect" class="select" style="display:none"></select>
+            <div class="hint" id="diHintCustomModel" data-i18n="hint.customModelOverride">カスタムモデルIDは下で上書きできます</div>
+            <div class="hint" id="cacheInfo"></div>
+          </div>
+
+          <div class="field" id="fieldCustomModelId">
+            <label class="field__label" data-i18n="field.customModelId">カスタムモデルID（任意）</label>
+            <input id="customModelId" class="input" placeholder="例: 01234567-.... または my-model" data-i18n-placeholder="field.customModelId.placeholder" />
+          </div>
+
+          <div class="field" id="diOptionsGroup">
+            <label class="field__label" data-i18n="field.analysisOptions">解析オプション</label>
+            <div class="option-group">
+              <label class="option"><input id="optHighRes" type="checkbox" /> <span class="fieldLabelWithTooltip"><span data-i18n="field.option.highRes">High resolution (ocrHighResolution)</span><span class="infoTooltip" tabindex="0" data-i18n-title="tooltip.diHighRes" data-i18n-aria-label="tooltip.diHighRes">&#9432;</span></span></label>
+              <label class="option"><input id="optFormulas" type="checkbox" /> <span class="fieldLabelWithTooltip"><span data-i18n="field.option.formulas">Formulas (formulas)</span><span class="infoTooltip" tabindex="0" data-i18n-title="tooltip.diFormulas" data-i18n-aria-label="tooltip.diFormulas">&#9432;</span></span></label>
+              <label class="option"><input id="optBarcodes" type="checkbox" /> <span class="fieldLabelWithTooltip"><span data-i18n="field.option.barcodes">Barcodes / QR (barcodes)</span><span class="infoTooltip" tabindex="0" data-i18n-title="tooltip.diBarcodes" data-i18n-aria-label="tooltip.diBarcodes">&#9432;</span></span></label>
+              <label class="option"><input id="optStyleFont" type="checkbox" /> <span class="fieldLabelWithTooltip"><span data-i18n="field.option.styleFont">Font/style (styleFont)</span><span class="infoTooltip" tabindex="0" data-i18n-title="tooltip.diStyleFont" data-i18n-aria-label="tooltip.diStyleFont">&#9432;</span></span></label>
+            </div>
+            <div class="option-grid">
+              <label class="option-grid__row"><span class="fieldLabelWithTooltip"><span data-i18n="field.pages">Pages</span><span class="infoTooltip" tabindex="0" data-i18n-title="tooltip.diPages" data-i18n-aria-label="tooltip.diPages">&#9432;</span></span> <input id="optPages" class="input" placeholder="例: 1-3,5" data-i18n-placeholder="field.pages.placeholder" /></label>
+              <label class="option-grid__row"><span class="fieldLabelWithTooltip"><span data-i18n="field.locale">Locale</span><span class="infoTooltip" tabindex="0" data-i18n-title="tooltip.diLocale" data-i18n-aria-label="tooltip.diLocale">&#9432;</span></span> <input id="optLocale" class="input" placeholder="例: ja-JP" data-i18n-placeholder="field.locale.placeholder" /></label>
+              <label class="option-grid__row"><span class="fieldLabelWithTooltip"><span data-i18n="field.outputContentFormat">Output content format</span><span class="infoTooltip" tabindex="0" data-i18n-title="tooltip.diOutputContentFormat" data-i18n-aria-label="tooltip.diOutputContentFormat">&#9432;</span></span>
+                <select id="optOutputContentFormat" class="select">
+                  <option value="" data-i18n="field.outputContentFormat.default">(default)</option>
+                  <option value="text">text</option>
+                  <option value="markdown">markdown</option>
+                </select>
+              </label>
+              <label class="option-grid__row"><span class="fieldLabelWithTooltip"><span data-i18n="field.queryFields">Query fields</span><span class="infoTooltip" tabindex="0" data-i18n-title="tooltip.diQueryFields" data-i18n-aria-label="tooltip.diQueryFields">&#9432;</span></span> <input id="optQueryFields" class="input" placeholder="FieldA,FieldB" data-i18n-placeholder="field.queryFields.placeholder" /></label>
+            </div>
+            <div class="hint" data-i18n="hint.analysisOptions">未指定ならサービス既定値を利用します。大文字小文字はそのまま送ります。</div>
+          </div>
+
+          <div class="field" id="cuOptionsGroup" style="display:none">
+            <label class="field__label" data-i18n="field.cuOptions">CU 実行 / 文書設定</label>
+
+            <div class="cu-options__section">
+              <div class="cu-options__sectionTitle" data-i18n="field.cuRequestOptions">実行オプション</div>
+              <div class="option-grid">
+                <label class="option-grid__row"><span class="fieldLabelWithTooltip"><span data-i18n="field.contentRange">解析範囲</span><span class="infoTooltip" tabindex="0" data-i18n-title="tooltip.cuContentRange" data-i18n-aria-label="tooltip.cuContentRange">&#9432;</span></span> <input id="optCuContentRange" class="input" placeholder="例: 1-3,5 または 0-30000" data-i18n-placeholder="field.contentRange.placeholder" /></label>
+                <label class="option-grid__row"><span class="fieldLabelWithTooltip"><span data-i18n="field.processingLocation">処理ロケーション</span><span class="infoTooltip" tabindex="0" data-i18n-title="tooltip.cuProcessingLocation" data-i18n-aria-label="tooltip.cuProcessingLocation">&#9432;</span></span>
+                  <select id="optCuProcessingLocation" class="select">
+                    <option value="" data-i18n="common.defaultOption">(既定)</option>
+                    <option value="global">global</option>
+                    <option value="geography">geography</option>
+                    <option value="dataZone">dataZone</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+
+            <div class="cu-options__section">
+              <div class="cu-options__sectionTitle" data-i18n="field.cuGeneralOptions">一般</div>
+              <div class="option-grid">
+                <label class="option-grid__row"><span class="fieldLabelWithTooltip"><span data-i18n="field.cuReturnDetails">Return details</span><span class="infoTooltip" tabindex="0" data-i18n-title="tooltip.cuReturnDetails" data-i18n-aria-label="tooltip.cuReturnDetails">&#9432;</span></span>
+                  <select id="optCuReturnDetails" class="select">
+                    <option value="" data-i18n="field.cuBoolean.default">(service 既定)</option>
+                    <option value="true" data-i18n="field.cuBoolean.true">有効 (true)</option>
+                    <option value="false" data-i18n="field.cuBoolean.false">無効 (false)</option>
+                  </select>
+                </label>
+                <label class="option-grid__row"><span class="fieldLabelWithTooltip"><span data-i18n="field.cuOmitContent">Omit content</span><span class="infoTooltip" tabindex="0" data-i18n-title="tooltip.cuOmitContent" data-i18n-aria-label="tooltip.cuOmitContent">&#9432;</span></span>
+                  <select id="optCuOmitContent" class="select">
+                    <option value="" data-i18n="field.cuBoolean.default">(service 既定)</option>
+                    <option value="true" data-i18n="field.cuBoolean.true">有効 (true)</option>
+                    <option value="false" data-i18n="field.cuBoolean.false">無効 (false)</option>
+                  </select>
+                </label>
+                <label class="option-grid__row"><span class="fieldLabelWithTooltip"><span data-i18n="field.cuEstimateFieldSource">Field source / confidence</span><span class="infoTooltip" tabindex="0" data-i18n-title="tooltip.cuEstimateFieldSource" data-i18n-aria-label="tooltip.cuEstimateFieldSource">&#9432;</span></span>
+                  <select id="optCuEstimateFieldSource" class="select">
+                    <option value="" data-i18n="field.cuBoolean.default">(service 既定)</option>
+                    <option value="true" data-i18n="field.cuBoolean.true">有効 (true)</option>
+                    <option value="false" data-i18n="field.cuBoolean.false">無効 (false)</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+
+            <div class="cu-options__section">
+              <div class="cu-options__sectionTitle" data-i18n="field.cuDocumentOptions">文書抽出</div>
+              <div class="option-grid">
+                <label class="option-grid__row"><span class="fieldLabelWithTooltip"><span data-i18n="field.cuEnableOcr">OCR</span><span class="infoTooltip" tabindex="0" data-i18n-title="tooltip.cuEnableOcr" data-i18n-aria-label="tooltip.cuEnableOcr">&#9432;</span></span>
+                  <select id="optCuEnableOcr" class="select">
+                    <option value="" data-i18n="field.cuBoolean.default">(service 既定)</option>
+                    <option value="true" data-i18n="field.cuBoolean.true">有効 (true)</option>
+                    <option value="false" data-i18n="field.cuBoolean.false">無効 (false)</option>
+                  </select>
+                </label>
+                <label class="option-grid__row"><span class="fieldLabelWithTooltip"><span data-i18n="field.cuEnableLayout">Layout</span><span class="infoTooltip" tabindex="0" data-i18n-title="tooltip.cuEnableLayout" data-i18n-aria-label="tooltip.cuEnableLayout">&#9432;</span></span>
+                  <select id="optCuEnableLayout" class="select">
+                    <option value="" data-i18n="field.cuBoolean.default">(service 既定)</option>
+                    <option value="true" data-i18n="field.cuBoolean.true">有効 (true)</option>
+                    <option value="false" data-i18n="field.cuBoolean.false">無効 (false)</option>
+                  </select>
+                </label>
+                <label class="option-grid__row"><span class="fieldLabelWithTooltip"><span data-i18n="field.cuEnableFormula">Formula</span><span class="infoTooltip" tabindex="0" data-i18n-title="tooltip.cuEnableFormula" data-i18n-aria-label="tooltip.cuEnableFormula">&#9432;</span></span>
+                  <select id="optCuEnableFormula" class="select">
+                    <option value="" data-i18n="field.cuBoolean.default">(service 既定)</option>
+                    <option value="true" data-i18n="field.cuBoolean.true">有効 (true)</option>
+                    <option value="false" data-i18n="field.cuBoolean.false">無効 (false)</option>
+                  </select>
+                </label>
+                <label class="option-grid__row"><span class="fieldLabelWithTooltip"><span data-i18n="field.cuEnableBarcode">Barcode</span><span class="infoTooltip" tabindex="0" data-i18n-title="tooltip.cuEnableBarcode" data-i18n-aria-label="tooltip.cuEnableBarcode">&#9432;</span></span>
+                  <select id="optCuEnableBarcode" class="select">
+                    <option value="" data-i18n="field.cuBoolean.default">(service 既定)</option>
+                    <option value="true" data-i18n="field.cuBoolean.true">有効 (true)</option>
+                    <option value="false" data-i18n="field.cuBoolean.false">無効 (false)</option>
+                  </select>
+                </label>
+                <label class="option-grid__row"><span class="fieldLabelWithTooltip"><span data-i18n="field.cuEnableFigureDescription">Figure description</span><span class="infoTooltip" tabindex="0" data-i18n-title="tooltip.cuEnableFigureDescription" data-i18n-aria-label="tooltip.cuEnableFigureDescription">&#9432;</span></span>
+                  <select id="optCuEnableFigureDescription" class="select">
+                    <option value="" data-i18n="field.cuBoolean.default">(service 既定)</option>
+                    <option value="true" data-i18n="field.cuBoolean.true">有効 (true)</option>
+                    <option value="false" data-i18n="field.cuBoolean.false">無効 (false)</option>
+                  </select>
+                </label>
+                <label class="option-grid__row"><span class="fieldLabelWithTooltip"><span data-i18n="field.cuEnableFigureAnalysis">Figure analysis</span><span class="infoTooltip" tabindex="0" data-i18n-title="tooltip.cuEnableFigureAnalysis" data-i18n-aria-label="tooltip.cuEnableFigureAnalysis">&#9432;</span></span>
+                  <select id="optCuEnableFigureAnalysis" class="select">
+                    <option value="" data-i18n="field.cuBoolean.default">(service 既定)</option>
+                    <option value="true" data-i18n="field.cuBoolean.true">有効 (true)</option>
+                    <option value="false" data-i18n="field.cuBoolean.false">無効 (false)</option>
+                  </select>
+                </label>
+                <label class="option-grid__row"><span class="fieldLabelWithTooltip"><span data-i18n="field.cuEnableAnnotations">Annotations</span><span class="infoTooltip" tabindex="0" data-i18n-title="tooltip.cuEnableAnnotations" data-i18n-aria-label="tooltip.cuEnableAnnotations">&#9432;</span></span>
+                  <select id="optCuEnableAnnotations" class="select">
+                    <option value="" data-i18n="field.cuBoolean.default">(service 既定)</option>
+                    <option value="true" data-i18n="field.cuBoolean.true">有効 (true)</option>
+                    <option value="false" data-i18n="field.cuBoolean.false">無効 (false)</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+
+            <div class="cu-options__section">
+              <div class="cu-options__sectionTitle" data-i18n="field.cuFormatOptions">出力フォーマット</div>
+              <div class="option-grid">
+                <label class="option-grid__row"><span class="fieldLabelWithTooltip"><span data-i18n="field.cuTableFormat">Table format</span><span class="infoTooltip" tabindex="0" data-i18n-title="tooltip.cuTableFormat" data-i18n-aria-label="tooltip.cuTableFormat">&#9432;</span></span>
+                  <select id="optCuTableFormat" class="select">
+                    <option value="" data-i18n="common.defaultOption">(既定)</option>
+                    <option value="html">html</option>
+                    <option value="markdown">markdown</option>
+                  </select>
+                </label>
+                <label class="option-grid__row"><span class="fieldLabelWithTooltip"><span data-i18n="field.cuChartFormat">Chart format</span><span class="infoTooltip" tabindex="0" data-i18n-title="tooltip.cuChartFormat" data-i18n-aria-label="tooltip.cuChartFormat">&#9432;</span></span>
+                  <select id="optCuChartFormat" class="select">
+                    <option value="" data-i18n="common.defaultOption">(既定)</option>
+                    <option value="chartJs">chartJs</option>
+                    <option value="markdown">markdown</option>
+                  </select>
+                </label>
+                <label class="option-grid__row"><span class="fieldLabelWithTooltip"><span data-i18n="field.cuAnnotationFormat">Annotation format</span><span class="infoTooltip" tabindex="0" data-i18n-title="tooltip.cuAnnotationFormat" data-i18n-aria-label="tooltip.cuAnnotationFormat">&#9432;</span></span>
+                  <select id="optCuAnnotationFormat" class="select">
+                    <option value="" data-i18n="common.defaultOption">(既定)</option>
+                    <option value="none">none</option>
+                    <option value="markdown">markdown</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+
+            <div class="cu-options__section">
+              <div class="cu-options__sectionTitle" data-i18n="field.cuSegmentationOptions">分類 / 分割</div>
+              <div class="option-grid">
+                <label class="option-grid__row"><span class="fieldLabelWithTooltip"><span data-i18n="field.cuEnableSegment">Enable segment</span><span class="infoTooltip" tabindex="0" data-i18n-title="tooltip.cuEnableSegment" data-i18n-aria-label="tooltip.cuEnableSegment">&#9432;</span></span>
+                  <select id="optCuEnableSegment" class="select">
+                    <option value="" data-i18n="field.cuBoolean.default">(service 既定)</option>
+                    <option value="true" data-i18n="field.cuBoolean.true">有効 (true)</option>
+                    <option value="false" data-i18n="field.cuBoolean.false">無効 (false)</option>
+                  </select>
+                </label>
+                <label class="option-grid__row"><span class="fieldLabelWithTooltip"><span data-i18n="field.cuSegmentPerPage">Segment per page</span><span class="infoTooltip" tabindex="0" data-i18n-title="tooltip.cuSegmentPerPage" data-i18n-aria-label="tooltip.cuSegmentPerPage">&#9432;</span></span>
+                  <select id="optCuSegmentPerPage" class="select">
+                    <option value="" data-i18n="field.cuBoolean.default">(service 既定)</option>
+                    <option value="true" data-i18n="field.cuBoolean.true">有効 (true)</option>
+                    <option value="false" data-i18n="field.cuBoolean.false">無効 (false)</option>
+                  </select>
+                </label>
+              </div>
+              <label class="option-grid__row cu-options__row--wide">
+                <span class="fieldLabelWithTooltip"><span data-i18n="field.cuContentCategories">Content categories (JSON)</span><span class="infoTooltip" tabindex="0" data-i18n-title="tooltip.cuContentCategories" data-i18n-aria-label="tooltip.cuContentCategories">&#9432;</span></span>
+                <textarea id="optCuContentCategories" class="input cu-options__textarea" rows="5" data-i18n-placeholder="field.cuContentCategories.placeholder" placeholder='{"invoice":{"description":"Invoices","analyzerId":"prebuilt-invoice"}}'></textarea>
+              </label>
+              <div class="hint" data-i18n="hint.cuContentCategories">カテゴリ名をキーにした JSON object を指定します。description は推論用プロンプトとして使われ、analyzerId は任意です。</div>
+            </div>
+
+            <div class="cu-options__section" id="cuFieldSchemaSection" style="display:none">
+              <div class="cu-options__sectionTitle">
+                <span data-i18n="field.cuFieldSchema">フィールドスキーマ</span>
+                <div class="schema-mode-toggle">
+                  <button class="schema-mode-btn schema-mode-btn--active" type="button" id="schemaModeTblBtn" data-i18n="schema.modeTable">テーブル</button>
+                  <button class="schema-mode-btn" type="button" id="schemaModeJsonBtn" data-i18n="schema.modeJson">JSON</button>
+                </div>
+              </div>
+              <div class="hint" data-i18n="hint.cuFieldSchema">このアナライザーはフィールドスキーマが必須です。抽出したいフィールドを定義してください。</div>
+
+              <!-- Table mode -->
+              <div class="schema-editor" id="schemaTableMode">
+                <table class="schema-table" id="schemaTable">
+                  <thead>
+                    <tr>
+                      <th class="schema-table__th" data-i18n="schema.colName">フィールド名</th>
+                      <th class="schema-table__th" data-i18n="schema.colType">type</th>
+                      <th class="schema-table__th" data-i18n="schema.colDesc">description</th>
+                      <th class="schema-table__th schema-table__th--action"></th>
+                    </tr>
+                  </thead>
+                  <tbody id="schemaTableBody"></tbody>
+                </table>
+                <button class="btn btn--small" type="button" id="schemaAddRowBtn" data-i18n="schema.addField">＋ フィールド追加</button>
+              </div>
+
+              <!-- JSON mode -->
+              <div class="schema-editor" id="schemaJsonMode" style="display:none">
+                <textarea id="optCuFieldSchema" class="input cu-options__textarea" rows="8" data-i18n-placeholder="field.cuFieldSchema.placeholder" placeholder='{"title":{"type":"string","description":"Document title"},"amount":{"type":"number","description":"Total amount"}}'></textarea>
+              </div>
+              <div class="hint" data-i18n="hint.cuFieldSchemaTypes">type: string, number, integer, boolean, date, time, array, object</div>
+            </div>
+
+            <div class="hint" data-i18n="hint.cuOptions">未指定の項目は analyzer の既定値を使います。いずれかの文書設定を指定した場合は inline analyze body で runtime config を送信します。</div>
+          </div>
+
+          <div class="field">
+            <label class="field__label" data-i18n="field.job">ジョブ</label>
+            <div class="mono" id="jobInfo">-</div>
+          </div>
+        </div>
+
+        </div>
+
+        <div class="input-tabpane" id="input-tab-library" role="tabpanel" aria-label="Library" data-i18n-aria-label="input.tabs.library">
+        <div class="box box--secondary">
+          <div class="box__title" data-i18n="library.title">キャッシュ済みファイル</div>
+          <div class="hint" data-i18n="library.hint">サーバが保持しているキャッシュからロードします</div>
+          <div class="library__actions">
+            <button id="refreshLibraryBtn" class="btn btn--small" type="button" data-i18n="library.refresh">/app/storage から再読み込み</button>
+            <button id="compareBtn" class="btn btn--small btn--accent" type="button" disabled data-i18n="compare.button">比較</button>
+          </div>
+          <div class="library" id="libraryList">
+            <div class="hint">-</div>
+          </div>
+        </div>
+
+        </div>
+      </section>
+
+      <div class="splitter splitter--left" id="splitterLeft" role="separator" aria-orientation="vertical" aria-label="Resize Input/Preview" data-i18n-aria-label="splitter.left" tabindex="0"></div>
+
+      <section class="pane pane--center" id="main-pane-preview" data-main-pane="preview" role="tabpanel" aria-label="Preview" data-i18n-aria-label="pane.preview.aria">
+        <h2 class="pane__title" data-i18n="pane.preview.title">プレビュー</h2>
+        <div class="tabs tabs--preview">
+          <button class="tab tab--active" data-preview-tab="document" data-i18n="preview.tabs.document">Document</button>
+          <button class="tab" data-preview-tab="structure" data-i18n="preview.tabs.structure">Structure</button>
+          <button class="tab" data-preview-tab="structure3d" data-i18n="preview.tabs.structure3d">3D Structure</button>
+          <button class="tab tab--disabled" data-preview-tab="markdown" disabled data-i18n="preview.tabs.markdown">Markdown</button>
+          <button class="tab tab--disabled" data-preview-tab="raw" disabled data-i18n="preview.tabs.raw">Raw</button>
+          <button class="tab" data-preview-tab="media" style="display:none" data-i18n="preview.tabs.media">メディア</button>
+        </div>
+        
+        <div class="preview-tabpane preview-tabpane--active" id="preview-tab-document">
+          <div class="toolbar">
+            <div class="toolbar__group">
+              <button id="prevPageBtn" class="btn btn--small" type="button" disabled data-i18n="preview.prev">Prev</button>
+              <select id="pageSelect" class="select" disabled></select>
+              <button id="nextPageBtn" class="btn btn--small" type="button" disabled data-i18n="preview.next">Next</button>
+            </div>
+            <div class="toolbar__group">
+              <label class="toolbar__label" data-i18n="preview.bbox">BBox</label>
+              <select id="overlaySelect" class="select" disabled>
+                <option value="none" data-i18n="overlay.none">None</option>
+                <option value="lines" selected data-i18n="overlay.lines">Lines</option>
+                <option value="words" data-i18n="overlay.words">Words</option>
+                <option value="paragraphs" data-i18n="overlay.paragraphs">Paragraphs</option>
+                <option value="figures" data-i18n="overlay.figures">Figures</option>
+                <option value="formulas" data-i18n="overlay.formulas">Formulas</option>
+                <option value="barcodes" data-i18n="overlay.barcodes">Barcodes</option>
+                <option value="tables" data-i18n="overlay.tables">Tables</option>
+                <option value="keyValuePairs" data-i18n="overlay.keyValuePairs">KeyValuePairs</option>
+                <option value="selectionMarks" data-i18n="overlay.selectionMarks">SelectionMarks</option>
+              </select>
+            </div>
+          </div>
+          <div id="preview" class="preview">
+            <div class="hint" data-i18n="preview.hint">アップロード後に表示します（PDFはPDF.js描画＋BBoxオーバーレイ）</div>
+            <div id="busyOverlay" class="busy" aria-hidden="true">
+              <div class="busy__card">
+                <div class="busy__spinner" aria-hidden="true"></div>
+                <div class="busy__title" data-i18n="busy.title">Analyzing…</div>
+                <div class="busy__hint" data-i18n="busy.hint">結果が返るまでお待ちください</div>
+              </div>
+            </div>
+            <div id="bboxTooltip" class="tooltip" aria-hidden="true"></div>
+          </div>
+        </div>
+        
+        <div class="preview-tabpane" id="preview-tab-structure">
+          <div class="structure-viewer" id="structureViewer">
+            <div class="hint" data-i18n="structure.hint">解析後にparagraphsとsectionsの構造を表示します</div>
+          </div>
+        </div>
+
+        <div class="preview-tabpane" id="preview-tab-structure3d">
+          <div class="structure3d" id="structure3dRoot">
+            <div class="structure3d__toolbar">
+              <div class="structure3d__group">
+                <div class="structure3d__label" data-i18n="structure3d.mode">Mode</div>
+                <button class="btn btn--small" type="button" id="structure3dModePage" aria-pressed="true" data-i18n="structure3d.mode.page">Current page</button>
+                <button class="btn btn--small" type="button" id="structure3dModeAll" aria-pressed="false" data-i18n="structure3d.mode.all">All pages</button>
+              </div>
+              <div class="structure3d__group">
+                <label class="structure3d__check">
+                  <input type="checkbox" id="structure3dShowText" />
+                  <span data-i18n="structure3d.text">Text</span>
+                </label>
+              </div>
+              <div class="structure3d__group">
+                <div class="structure3d__label" data-i18n="structure3d.explode">Explode</div>
+                <input class="range" id="structure3dExplode" type="range" min="0" max="80" value="28" />
+              </div>
+              <div class="structure3d__group">
+                <div class="structure3d__label" data-i18n="structure3d.zoom">Zoom</div>
+                <input class="range" id="structure3dZoom" type="range" min="60" max="160" value="100" />
+              </div>
+              <div class="structure3d__group structure3d__group--right">
+                <div class="structure3d__hint" data-i18n="structure3d.hint">ドラッグで回転 / ホイールでズーム / タップで詳細</div>
+              </div>
+            </div>
+
+            <div class="structure3d__filters" id="structure3dFilters"></div>
+
+            <div class="structure3d__stage" id="structure3dStage" aria-label="3D document structure stage" data-i18n-aria-label="structure3d.stage">
+              <div class="structure3d__scene" id="structure3dScene">
+                <div class="structure3d__doc" id="structure3dDoc"></div>
+              </div>
+            </div>
+
+            <div class="structure3d__inspect" id="structure3dInspect" hidden>
+              <div class="structure3d__inspectTitle" id="structure3dInspectTitle" data-i18n="structure3d.selection">Selection</div>
+              <pre class="structure3d__inspectBody" id="structure3dInspectBody"></pre>
+            </div>
+          </div>
+        </div>
+
+        <div class="preview-tabpane" id="preview-tab-markdown">
+          <div class="markdown-viewer" id="markdownViewer">
+            <div class="hint" data-i18n="markdown.hint">Output content format = markdown のときにここへ表示します</div>
+          </div>
+        </div>
+
+        <div class="preview-tabpane" id="preview-tab-raw">
+          <pre class="raw-viewer" id="rawViewer" data-i18n="raw.hint">Output content format = markdown のときにここへ生テキストで表示します</pre>
+        </div>
+
+        <div class="preview-tabpane" id="preview-tab-media">
+          <div class="media-viewer" id="mediaViewer">
+            <div class="hint" data-i18n="media.hint">音声/動画ファイルをアップロードすると再生できます</div>
+          </div>
+        </div>
+
+        <!-- Comparison mode overlay -->
+        <div class="compare-overlay" id="compareOverlay" hidden>
+          <div class="compare-overlay__header">
+            <h2 class="compare-overlay__title" data-i18n="compare.title">結果比較（セマンティック Diff）</h2>
+            <div class="compare-overlay__actions">
+              <button class="btn btn--small" type="button" id="compareExpandAllBtn" data-i18n="compare.expandAll">すべて展開</button>
+              <button class="btn btn--small" type="button" id="compareCollapseAllBtn" data-i18n="compare.collapseAll">すべて折りたたむ</button>
+              <button class="btn btn--small" type="button" id="compareDiffsOnlyBtn" data-i18n="compare.showOnlyDiffs">差分のみ</button>
+              <button class="btn btn--small btn--danger" type="button" id="compareCloseBtn" data-i18n="compare.close">比較を閉じる</button>
+            </div>
+          </div>
+          <div class="compare-overlay__tabs" id="compareResultTabs"></div>
+          <div class="compare-overlay__stats" id="compareStats"></div>
+          <div class="compare-overlay__body" id="compareBody">
+            <div class="hint" data-i18n="compare.noResults">比較する結果がありません</div>
+          </div>
+        </div>
+      </section>
+
+      <div class="splitter splitter--right" id="splitterRight" role="separator" aria-orientation="vertical" aria-label="Resize Preview/Results" data-i18n-aria-label="splitter.right" tabindex="0"></div>
+
+      <section class="pane pane--right" id="main-pane-results" data-main-pane="results" role="tabpanel" aria-label="Results" data-i18n-aria-label="pane.results.aria">
+        <h2 class="pane__title" data-i18n="pane.results.title">結果</h2>
+        <div class="tabs" id="resultTabs">
+          <button class="tab tab--active" data-tab="summary" data-i18n="results.tabs.summary">概要</button>
+          <button class="tab" data-tab="items" data-i18n="results.tabs.items">項目</button>
+          <button class="tab" data-tab="json" data-i18n="results.tabs.json">Response JSON</button>
+          <button class="tab" data-tab="requestJson" data-i18n="results.tabs.requestJson">Request JSON</button>
+        </div>
+
+        <div class="tabpane tabpane--active" id="tab-summary">
+          <pre class="pre" id="summaryText">-</pre>
+        </div>
+        <div class="tabpane" id="tab-items">
+          <div class="items" id="itemsRoot">
+	            <div class="hint" data-i18n="items.hint">解析後にここへ階層表示します</div>
+          </div>
+        </div>
+        <div class="tabpane" id="tab-json">
+          <div class="toolbar toolbar--compact">
+              <button id="downloadJsonBtn" class="btn btn--small" type="button" disabled data-i18n="action.downloadJson">Download JSON</button>
+              <button id="expandAllBtn" class="btn btn--small" type="button" disabled data-i18n="action.expandAll">Expand All</button>
+              <button id="collapseAllBtn" class="btn btn--small" type="button" disabled data-i18n="action.collapseAll">Collapse All</button>
+          </div>
+          <div class="json-viewer" id="jsonViewer">
+              <div class="hint" data-i18n="json.hint">解析後にJSONを表示します</div>
+          </div>
+        </div>
+        <div class="tabpane" id="tab-requestJson">
+          <div class="toolbar toolbar--compact">
+              <button id="downloadRequestJsonBtn" class="btn btn--small" type="button" disabled data-i18n="action.downloadJson">Download JSON</button>
+              <button id="expandAllRequestJsonBtn" class="btn btn--small" type="button" disabled data-i18n="action.expandAll">Expand All</button>
+              <button id="collapseAllRequestJsonBtn" class="btn btn--small" type="button" disabled data-i18n="action.collapseAll">Collapse All</button>
+          </div>
+          <div class="json-viewer" id="requestJsonViewer">
+              <div class="hint" data-i18n="json.requestHint">解析後にリクエストJSONを表示します</div>
+          </div>
+        </div>
+        <!-- User tabs (dynamically added from HTML files under usertab/) -->
+        <div id="userTabPanes"></div>
+      </section>
+    </main>
+  </div>
+
+  <script type="module" nonce="{{ csp_nonce }}">
+    // pdf.js v5 ESM (requested)
+    // - exports are not global, so we attach to window for app.js compatibility
+    import * as pdfjsLib from 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.149/pdf.min.mjs';
+
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.149/pdf.worker.min.mjs';
+    window.pdfjsLib = pdfjsLib;
+    window.__pdfjsReady = Promise.resolve({ source: 'cdnjs-mjs', version: '5.4.149' });
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.1/marked.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.4/dist/purify.min.js" defer></script>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>

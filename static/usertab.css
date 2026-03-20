@@ -1,0 +1,272 @@
+/* ================================================================
+   usertab.css – User Tab shared component styles
+   ================================================================
+   Common classes available for HTML files under usertab/.
+   References the app’s theme CSS variables (--text, --bg, --border,
+   --surface, --surface2) so it automatically follows theme changes.
+
+   Usage:
+     Just write plain HTML in usertab/xxx.html.
+     No <style> block is needed.
+
+   Color modifiers (common to all components):
+     --critical / --high   : red    (#f85149)
+     --warn / --medium     : yellow (#d29922)
+     --low / --ok / --pass : green  (#3fb950)
+     --info                : blue   (#58a6ff)
+     --total / --default   : theme text color
+   ================================================================ */
+
+/* ── Semantic color constants ─────────────────── */
+.ut-content {
+  --ut-red: #f85149;
+  --ut-red-bg: rgba(248, 81, 73, 0.18);
+  --ut-red-border: rgba(248, 81, 73, 0.4);
+  --ut-yellow: #d29922;
+  --ut-yellow-bg: rgba(210, 153, 34, 0.18);
+  --ut-yellow-border: rgba(210, 153, 34, 0.4);
+  --ut-green: #3fb950;
+  --ut-green-bg: rgba(63, 185, 80, 0.18);
+  --ut-green-border: rgba(63, 185, 80, 0.4);
+  --ut-blue: #58a6ff;
+  --ut-blue-bg: rgba(88, 166, 255, 0.18);
+
+  padding: 12px;
+  font-family: inherit;
+  color: var(--text);
+}
+
+/* ── Header (.ut-header) ────────────────────── */
+.ut-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.ut-header__icon  { font-size: 1.6em; }
+.ut-header__title { font-size: 1.1em; font-weight: 600; }
+
+/* ── Badge (.ut-badge) ── Generic inline label ── */
+.ut-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.82em;
+  font-weight: 600;
+}
+.ut-badge--right { margin-left: auto; } /* Right-align within header */
+
+.ut-badge--critical, .ut-badge--high {
+  background: var(--ut-red-bg);
+  color: var(--ut-red);
+  border: 1px solid var(--ut-red-border);
+}
+.ut-badge--warn, .ut-badge--medium {
+  background: var(--ut-yellow-bg);
+  color: var(--ut-yellow);
+  border: 1px solid var(--ut-yellow-border);
+}
+.ut-badge--low, .ut-badge--ok, .ut-badge--pass {
+  background: var(--ut-green-bg);
+  color: var(--ut-green);
+  border: 1px solid var(--ut-green-border);
+}
+.ut-badge--info {
+  background: var(--ut-blue-bg);
+  color: var(--ut-blue);
+  border: 1px solid rgba(88, 166, 255, 0.4);
+}
+
+/* ── Summary cards (.ut-cards) ─────────────── */
+.ut-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.ut-card {
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  text-align: center;
+}
+.ut-card__value {
+  font-size: 1.5em;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.ut-card__label {
+  font-size: 0.75em;
+  opacity: 0.7;
+  margin-top: 2px;
+}
+.ut-card--critical .ut-card__value,
+.ut-card--high     .ut-card__value { color: var(--ut-red); }
+.ut-card--warn     .ut-card__value,
+.ut-card--medium   .ut-card__value { color: var(--ut-yellow); }
+.ut-card--low      .ut-card__value,
+.ut-card--ok       .ut-card__value,
+.ut-card--pass     .ut-card__value { color: var(--ut-green); }
+.ut-card--info     .ut-card__value { color: var(--ut-blue); }
+.ut-card--total    .ut-card__value,
+.ut-card--default  .ut-card__value { color: var(--text); }
+
+/* ── Section (.ut-section) ──────────────────── */
+.ut-section { margin-bottom: 16px; }
+.ut-section__title {
+  font-size: 0.9em;
+  font-weight: 600;
+  margin-bottom: 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* ── Table (.ut-table) ────────────────────────── */
+.ut-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82em;
+  margin-bottom: 8px;
+}
+.ut-table th, .ut-table td {
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+.ut-table th {
+  background: var(--surface2);
+  font-weight: 600;
+  font-size: 0.9em;
+  white-space: nowrap;
+}
+.ut-table tr:hover td {
+  background: var(--surface2);
+}
+
+/* ── List (.ut-list) ── Checklist / item common styles */
+.ut-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.ut-list-item {
+  padding: 10px 12px;
+  margin-bottom: 6px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 0.82em;
+  line-height: 1.6;
+}
+
+/* Icon + text + status horizontal layout */
+.ut-list-item--row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ut-list-item__icon { font-size: 1.1em; flex-shrink: 0; }
+.ut-list-item__text { flex: 1; }
+.ut-list-item__status {
+  font-size: 0.78em;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.ut-list-item__status--pass { color: var(--ut-green); }
+.ut-list-item__status--fail { color: var(--ut-red); }
+.ut-list-item__status--warn { color: var(--ut-yellow); }
+.ut-list-item__status--na   { color: var(--text); opacity: 0.5; }
+
+/* ── Finding item (.ut-finding) ────────────── */
+.ut-finding__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.ut-finding__title {
+  font-weight: 600;
+  font-size: 0.88em;
+}
+.ut-finding__desc {
+  font-size: 0.82em;
+  opacity: 0.85;
+  line-height: 1.5;
+  margin-top: 4px;
+}
+.ut-finding__ref {
+  font-size: 0.75em;
+  opacity: 0.6;
+  margin-top: 6px;
+}
+
+/* ── Highlight (.ut-hl) ── Inline text emphasis ── */
+.ut-hl {
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-family: monospace;
+  font-size: 1.05em;
+  font-weight: 600;
+}
+.ut-hl--wrong {
+  background: rgba(248, 81, 73, 0.15);
+  color: var(--ut-red);
+  text-decoration: line-through;
+}
+.ut-hl--correct {
+  background: rgba(63, 185, 80, 0.15);
+  color: var(--ut-green);
+}
+
+/* ── Context quote (.ut-context) ──────────────── */
+.ut-context {
+  font-size: 0.82em;
+  color: var(--text);
+  opacity: 0.75;
+  padding: 4px 8px;
+  background: var(--surface);
+  border-radius: 4px;
+  font-family: monospace;
+  line-height: 1.6;
+}
+
+/* ── Clause quote (.ut-clause) ────────────────── */
+.ut-clause {
+  font-size: 0.82em;
+  padding: 6px 10px;
+  background: var(--surface);
+  border-left: 3px solid var(--border);
+  border-radius: 0 4px 4px 0;
+  margin: 4px 0;
+  line-height: 1.6;
+  color: var(--text);
+  opacity: 0.9;
+}
+.ut-clause--critical, .ut-clause--high { border-left-color: var(--ut-red); }
+.ut-clause--warn, .ut-clause--medium   { border-left-color: var(--ut-yellow); }
+
+.ut-clause mark {
+  background: rgba(248, 81, 73, 0.2);
+  color: var(--ut-red);
+  padding: 0 2px;
+  border-radius: 2px;
+}
+.ut-clause mark.ut-mark--warn {
+  background: rgba(210, 153, 34, 0.2);
+  color: var(--ut-yellow);
+}
+
+/* ── Footer (.ut-footer) ──────────────────────── */
+.ut-footer {
+  margin-top: 16px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 0.75em;
+  opacity: 0.5;
+  text-align: right;
+}
