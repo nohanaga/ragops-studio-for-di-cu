@@ -1,8 +1,8 @@
 flask==3.0.3
 python-dotenv==1.0.1
-azure-ai-documentintelligence==1.0.2
+azure-ai-documentintelligence>=1.0.2
 azure-ai-contentunderstanding>=1.0.0
-azure-identity==1.19.0
-azure-core==1.31.0
+azure-identity
+azure-core
 azure-storage-blob==12.24.1
 gunicorn==22.0.0
