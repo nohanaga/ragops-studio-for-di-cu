@@ -416,6 +416,53 @@ export CU_KEY="<your-cu-key>"
 - キーをローテーションしたい場合は `-DiKey` / `-CuKey`（bash: `--di-key` / `--cu-key`）を渡すと secret を更新します
 - 認証モードを切り替える場合は `-DiAuthMode` / `-CuAuthMode`（bash: `--di-auth-mode` / `--cu-auth-mode`）を指定してください
 
+## Entra ID によるアクセス保護 (Easy Auth)
+
+本アプリにはユーザーログイン機能が組み込まれていません。Azure Container Apps に外部公開 (external ingress) でデプロイする場合は、**組み込み認証 (Easy Auth)** を有効にして Microsoft Entra ID テナント内のユーザーのみにアクセスを制限することを推奨します。
+
+### いつ有効にすべきか？
+
+| シナリオ | 推奨 |
+|---|---|
+| ローカル (`localhost`) / VPN 内のみ | 不要 — ネットワーク分離で十分 |
+| Azure Container Apps **internal** ingress | 推奨（多層防御） |
+| Azure Container Apps **external** ingress | **強く推奨** — 認証なしでは全 API がインターネットから到達可能 |
+| 機密文書を扱う場合 | **強く推奨** — アップロードファイルや解析結果が漏洩するリスク |
+
+認証がない場合の主なリスク:
+- 誰でも `POST /api/analyze` を呼べるため、DI/CU の API クォータを消費され課金が発生する
+- `DELETE /api/library/<file_hash>` が保護されておらず、第三者にデータを削除される恐れがある
+- 誰がどの操作をしたかの監査ログが残らない
+
+### セットアップ手順（アプリコードの変更不要）
+
+1. **Microsoft Entra ID にアプリを登録**
+
+   ```bash
+   az ad app create --display-name "RAGOps Studio" \
+       --web-redirect-uris "https://<your-container-app-fqdn>/.auth/login/aad/callback" \
+       --sign-in-audience AzureADMyOrg
+   ```
+
+   出力に含まれる `appId`（クライアント ID）を控えてください。
+
+2. **Container App で認証を有効化**
+
+   ```bash
+   az containerapp auth microsoft update \
+       --name <container-app-name> \
+       --resource-group <resource-group> \
+       --client-id <app-client-id> \
+       --issuer "https://login.microsoftonline.com/<tenant-id>/v2.0" \
+       --yes
+   ```
+
+3. **確認**: アプリの URL にアクセスすると、未認証ユーザーは Entra ID のログインページにリダイレクトされます。
+
+> 💡 認証済みユーザーの情報はリクエストヘッダー `X-MS-CLIENT-PRINCIPAL-NAME` で取得でき、将来的な監査ログに活用できます。
+>
+> 詳細は [Azure Container Apps の認証と承認](https://learn.microsoft.com/ja-jp/azure/container-apps/authentication) を参照してください。
+
 ## ライセンス
 
 このプロジェクトは [LICENSE](LICENSE) ファイルに基づいてライセンスされています。
