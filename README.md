@@ -414,6 +414,53 @@ Re-run the same command to rebuild/push the image and update the Container App.
 - To rotate keys, pass `-DiKey` / `-CuKey` (bash: `--di-key` / `--cu-key`) to update secrets.
 - To switch auth mode, pass the new `-DiAuthMode` / `-CuAuthMode` (bash: `--di-auth-mode` / `--cu-auth-mode`) value.
 
+## Securing with Entra ID (Easy Auth)
+
+This app does **not** include user login functionality. When deploying to Azure Container Apps with external ingress, consider enabling **Built-in Authentication (Easy Auth)** to restrict access to your Microsoft Entra ID tenant.
+
+### When should you enable it?
+
+| Scenario | Recommendation |
+|---|---|
+| Local only (`localhost`) or behind VPN | Not required — network isolation is sufficient |
+| Azure Container Apps with **internal** ingress | Recommended (defense in depth) |
+| Azure Container Apps with **external** ingress | **Strongly recommended** — all APIs are publicly reachable without auth |
+| Handling confidential documents | **Strongly recommended** — uploaded files and analysis results could leak |
+
+Key risks without authentication:
+- Anyone on the internet can call `POST /api/analyze`, consuming your DI/CU quota and incurring costs
+- `DELETE /api/library/<file_hash>` is unprotected — data can be deleted by unauthorized users
+- No audit trail of who performed which operations
+
+### Setup (no code changes required)
+
+1. **Register an app in Microsoft Entra ID**
+
+   ```bash
+   az ad app create --display-name "RAGOps Studio" \
+       --web-redirect-uris "https://<your-container-app-fqdn>/.auth/login/aad/callback" \
+       --sign-in-audience AzureADMyOrg
+   ```
+
+   Note the `appId` (client ID) from the output.
+
+2. **Enable authentication on the Container App**
+
+   ```bash
+   az containerapp auth microsoft update \
+       --name <container-app-name> \
+       --resource-group <resource-group> \
+       --client-id <app-client-id> \
+       --issuer "https://login.microsoftonline.com/<tenant-id>/v2.0" \
+       --yes
+   ```
+
+3. **Verify**: accessing the app URL now redirects unauthenticated users to the Entra ID login page.
+
+> 💡 The authenticated user's identity is available in the `X-MS-CLIENT-PRINCIPAL-NAME` request header, which can be used for future audit logging.
+>
+> For more details, see [Authentication and authorization in Azure Container Apps](https://learn.microsoft.com/azure/container-apps/authentication).
+
 
 ## License
 
