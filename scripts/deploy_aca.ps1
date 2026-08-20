@@ -90,6 +90,10 @@ param(
     [ValidateSet("key", "identity")]
     [string]$CuAuthMode = "key",
 
+    # Enable prerelease Content Understanding API features (no SLA)
+    [Parameter(Mandatory = $false)]
+    [bool]$CuEnablePreview = $false,
+
     # Content Understanding resource name (required for identity mode to assign RBAC role)
     [Parameter(Mandatory = $false)]
     [string]$CuResourceName,
@@ -602,7 +606,10 @@ if (-not $appExists) {
     }
 
     # Build env vars list
-    $envVarsList = @("UPLOADS_ENABLED=$uploadsEnvValue")
+    $envVarsList = @(
+        "UPLOADS_ENABLED=$uploadsEnvValue",
+        "CU_ENABLE_PREVIEW=$($CuEnablePreview.ToString().ToLowerInvariant())"
+    )
     if ($di) {
         if ($DiAuthMode -eq "identity") {
             $envVarsList += @("DI_ENDPOINT=$($di.Endpoint)", "DI_AUTH_MODE=identity")
@@ -730,7 +737,10 @@ else {
     }
 
     # ── Build env vars ─────────────────────────────────────────
-    $setEnvVars = @("UPLOADS_ENABLED=$uploadsEnvValue")
+    $setEnvVars = @(
+        "UPLOADS_ENABLED=$uploadsEnvValue",
+        "CU_ENABLE_PREVIEW=$($CuEnablePreview.ToString().ToLowerInvariant())"
+    )
     if ($di) {
         $setEnvVars += @("DI_AUTH_MODE=$DiAuthMode")
         if ($DiAuthMode -eq "identity") {

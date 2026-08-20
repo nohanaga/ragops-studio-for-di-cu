@@ -96,12 +96,12 @@ storage/
 
 | | Document Intelligence (DI) | Content Understanding (CU) |
 |---|---|---|
-| **SDK** | `azure-ai-documentintelligence` 1.0.2 | `azure-ai-contentunderstanding` ≥1.0.0 |
+| **SDK** | `azure-ai-documentintelligence` 1.0.2 | `azure-ai-contentunderstanding` ≥1.1.0, <1.2.0 |
 | **API バージョン** | v4.0 GA | GA 2025-11-01 |
 | **組み込みモデル** | 30 種のプリビルトモデル | 47 種のプリビルトアナライザー |
 | **カスタムモデル** | モデル ID 手動入力 | 派生アナライザー自動作成 |
 | **メディア対応** | PDF, 画像 | PDF, 画像, 音声, 動画, Office 文書 |
-| **オプションパネル** | DI 固有の features & パラメータ | 18 種中 16 種の Processing Configuration パラメータ (89%) |
+| **オプションパネル** | DI 固有の features & パラメータ | GA 設定、および Preview の Agentic ワークフローとページ内分割 |
 
 ### サービス切り替え
 
@@ -150,7 +150,7 @@ storage/
 
 ## 4. Content Understanding (CU) 解析
 
-### 対応 Processing Configuration パラメータ (16/18)
+### 対応 Processing Configuration パラメータ
 
 | カテゴリ | パラメータ | UI コントロール | SDK キー |
 |---|---|---|---|
@@ -178,6 +178,18 @@ storage/
 | 解析範囲 | テキスト入力 | `content_range`（リクエストレベル、config ではない） |
 | 処理ロケーション | ドロップダウン (global/geography/dataZone) | `processing_location`（リクエストレベル） |
 
+### 2026 Preview 機能
+
+`CU_ENABLE_PREVIEW=true` の場合だけ、`2026-06-01-preview` プロファイルを選択できます。Preview は一般提供前であり、SLA はありません。
+
+| 機能 | UI / 実装 | 主な制約 |
+|---|---|---|
+| 同期解析 | 実行方式で「同期」を選択 | `prebuilt-read` / `prebuilt-layout` のみ |
+| Agentic ワークフロー | `workflow=agentic` | 文書のみ。`method=extract` フィールドは非対応 |
+| ページ内分割 | `allow_in_page_segments=true` | `enable_segment=true` が必要。`segment_per_page` と排他 |
+| 署名・メタデータ・セグメント | 項目一覧と BBox オーバーレイ | 応答に存在する要素だけを表示 |
+| Preview 税務アナライザー | Preview 選択時だけモデル一覧へ追加 | GA ではサーバー側で拒否 |
+
 ### フィールドスキーマエディター
 
 スキーマが必須のアナライザー（`needsSchema: true`, 例: `prebuilt-image`, `prebuilt-audio`, `prebuilt-video`）向け:
@@ -201,11 +213,11 @@ CU GA (2025-11-01) はリクエスト単位の config オーバーライドを�
 
 ### CU 解析フロー
 
-1. クライアントが `POST /api/cu/analyze` を `{ documentId, analyzerId, options }` で送信。
-2. キャッシュキーはバージョンプレフィックス付き: `cu:v8:<analyzerId>__<optionsSig>`。
-3. キャッシュミス → スレッド起動 → `analyze_content_file()` / `analyze_content_bytes()` を呼び出し。
-4. CU SDK: `client.begin_analyze_binary()`（バイト直渡し）またはファイルベース解析。
-5. 結果は `normalizeCuResultForUi()` で UI 向けに正規化。
+1. クライアントが `POST /api/cu/analyze` へ `apiProfile`、`executionMode`、`analysisOptions`、`analyzerOverrides` を含む型付き要求を送信。
+2. キャッシュキーは `cu:v9:<profile>:<apiVersion>:<mode>:<analyzerId>__<optionsSig>`。GA / Preview と同期 / 非同期を混在させない。
+3. GA は `CuGaAdapter` から安定版 SDK を使用し、Preview は `CuPreviewAdapter` から REST API を使用する。
+4. 非同期応答は `Operation-Location` をポーリングし、同期応答も完了済みの既存ジョブ契約へ変換する。
+5. 生 JSON をそのままキャッシュし、`normalizeCuResultForUi()` が API 情報、根拠、署名、メタデータ、セグメントを UI 向けに索引化する。
 
 ---
 
@@ -400,8 +412,8 @@ CSS 3D トランスフォームによるインタラクティブな 3D 分解ビ
 
 - **目的**: 同一ファイル + モデル + オプション組み合わせでの冗長な API 呼び出しを回避。
 - **キャッシュキー**: `SHA-256(ファイル内容)` → ディレクトリ、`base64url(model_id)` → ファイル名。
-- **オプション署名**: `SHA-1(json(ソートされたオプション))` を model_id に `model_id__sig` として付加。
-- **CU バージョンプレフィックス**: `cu:v8:<analyzer_id>` — SDK レスポンス形式変更時にバージョンアップ。
+- **DI オプション署名**: `SHA-1(json(ソートされたオプション))` を model_id に `model_id__sig` として付加。
+- **CU v9 キー**: `cu:v9:<profile>:<apiVersion>:<executionMode>:<analyzerId>__<SHA-256要求署名>`。API と実行方式が異なる結果を分離する。
 
 ### ローカルキャッシュ (`cache.py` の `ResultCache`)
 
@@ -639,13 +651,17 @@ queued → running → succeeded / failed
 
 - `POST /api/analyze` または `POST /api/cu/analyze` 後、クライアントは `{ job: { id, cacheHit } }` を受信。
 - `cacheHit=true` の場合: 結果は即座に利用可能。
-- それ以外: クライアントが `GET /api/jobs/<id>` を間隔を空けてポーリングし、`succeeded` または `failed` になるまで待機。
+- CU 非同期モードでは待機中も入力をロックせず、別文書、別モデル、別設定の解析を開始可能。
+- ジョブごとに開始時の文書と要求を保持し、現在の入力が変わっていれば完了結果で画面を上書きしない。ジョブ一覧の「結果を開く」から復元する。
+- 同一要求がすでに実行中の場合は二重送信しない。
+- それ以外: クライアントが `GET /api/jobs/<id>` を間隔を空けてポーリングし、`succeeded` または `failed` になるまで監視。
 - 成功時: `GET /api/jobs/<id>/result` で結果を取得。
 
-### バックグラウンドスレッド
+### 解析ワーカー
 
-- 解析は `threading.Thread(target=_run_job, daemon=True)` で実行。
-- デーモンスレッドによりプロセスのクリーンなシャットダウンを保証。
+- 各サーバープロセスで `ANALYSIS_WORKERS`（既定 4）の固定数デーモンワーカーを実行。
+- 各プロセスの待機キューは `ANALYSIS_QUEUE_SIZE`（既定 32）で制限し、満杯の場合は `503 analysis_queue_full`。
+- CU 同期モードは入力ペインを前景ロックし、応答完了後に既存ジョブ契約から結果を表示。
 
 ---
 
@@ -826,6 +842,9 @@ form-action 'self'
 | `CU_ENDPOINT` | はい* | — | Content Understanding エンドポイント URL |
 | `CU_KEY` | 条件付き | — | CU API キー（key/auto モード時に必要） |
 | `CU_AUTH_MODE` | いいえ | `auto` | `key` / `identity` / `auto` |
+| `CU_ENABLE_PREVIEW` | いいえ | `false` | `true` の場合だけ CU Preview API と UI を有効化 |
+| `ANALYSIS_WORKERS` | いいえ | `4` | プロセスごとの同時解析ワーカー数 |
+| `ANALYSIS_QUEUE_SIZE` | いいえ | `32` | プロセスごとの最大待機ジョブ数 |
 | `STORAGE_BACKEND` | いいえ | `local` | `local` / `blob` |
 | `AZURE_STORAGE_ACCOUNT_NAME` | 条件付き | — | Blob モード時に必要 |
 | `AZURE_STORAGE_CONTAINER_NAME` | いいえ | `appstorage` | Blob コンテナ名 |
@@ -857,8 +876,9 @@ form-action 'self'
 
 | メソッド | パス | 説明 |
 |---|---|---|
-| `GET` | `/api/cu/models` | CU プリビルトアナライザー一覧（47 アナライザー + カテゴリ） |
-| `POST` | `/api/cu/analyze` | CU 解析ジョブ開始。Body: `{documentId, analyzerId, options}` |
+| `GET` | `/api/cu/capabilities` | 利用可能な API プロファイル、API バージョン、実行方式 |
+| `GET` | `/api/cu/models?apiProfile=<ga\|preview>` | 選択した API で利用可能な CU アナライザー一覧 |
+| `POST` | `/api/cu/analyze` | CU 解析ジョブ開始。Body は `apiProfile`、`executionMode`、`analysisOptions`、`analyzerOverrides` を含む |
 
 ### ジョブ
 

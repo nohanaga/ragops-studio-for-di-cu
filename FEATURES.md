@@ -96,12 +96,12 @@ The app supports two Azure AI services in parallel:
 
 | | Document Intelligence (DI) | Content Understanding (CU) |
 |---|---|---|
-| **SDK** | `azure-ai-documentintelligence` 1.0.2 | `azure-ai-contentunderstanding` ≥1.0.0 |
+| **SDK** | `azure-ai-documentintelligence` 1.0.2 | `azure-ai-contentunderstanding` ≥1.1.0, <1.2.0 |
 | **API version** | v4.0 GA | GA 2025-11-01 |
 | **Built-in models** | 30 prebuilt models | 47 prebuilt analyzers |
 | **Custom models** | Manual model ID input | Derived analyzer auto-creation |
 | **Media support** | PDF, images | PDF, images, audio, video, Office docs |
-| **Options panel** | DI-specific features & params | 16/18 Processing Configuration params (89%) |
+| **Options panel** | DI-specific features & params | GA configuration plus Preview agentic workflow and in-page segmentation |
 
 ### Service Switching
 
@@ -150,7 +150,7 @@ The app supports two Azure AI services in parallel:
 
 ## 4. Content Understanding (CU) Analysis
 
-### Supported Processing Configuration Parameters (16/18)
+### Supported Processing Configuration Parameters
 
 | Category | Parameter | UI Control | SDK Key |
 |---|---|---|---|
@@ -178,6 +178,18 @@ The app supports two Azure AI services in parallel:
 | Content range | Text input | `content_range` (request-level, not config) |
 | Processing location | Dropdown (global/geography/dataZone) | `processing_location` (request-level) |
 
+### 2026 Preview Features
+
+The `2026-06-01-preview` profile is selectable only when `CU_ENABLE_PREVIEW=true`. Preview is prerelease and has no SLA.
+
+| Feature | UI / Implementation | Main Constraint |
+|---|---|---|
+| Synchronous analysis | Select Synchronous execution | `prebuilt-read` / `prebuilt-layout` only |
+| Agentic workflow | `workflow=agentic` | Documents only; fields using `method=extract` are unsupported |
+| In-page segmentation | `allow_in_page_segments=true` | Requires `enable_segment=true`; mutually exclusive with `segment_per_page` |
+| Signatures, metadata, segments | Items list and BBox overlays | Displays only elements present in the response |
+| Preview tax analyzers | Added to the model list under Preview | Rejected server-side under GA |
+
 ### Field Schema Editor
 
 For analyzers requiring field schemas (marked with `needsSchema: true`, e.g., `prebuilt-image`, `prebuilt-audio`, `prebuilt-video`):
@@ -201,11 +213,11 @@ CU GA (2025-11-01) does not support per-request config overrides. When UI option
 
 ### CU Analysis Flow
 
-1. Client sends `POST /api/cu/analyze` with `{ documentId, analyzerId, options }`.
-2. Cache key uses version prefix: `cu:v8:<analyzerId>__<optionsSig>`.
-3. If cache miss → spawns thread → calls `analyze_content_file()` / `analyze_content_bytes()`.
-4. CU SDK: `client.begin_analyze_binary()` (for bytes) or file-based analysis.
-5. Result normalized for UI via `normalizeCuResultForUi()`.
+1. The client sends `POST /api/cu/analyze` with a typed request containing `apiProfile`, `executionMode`, `analysisOptions`, and `analyzerOverrides`.
+2. Cache keys use `cu:v9:<profile>:<apiVersion>:<mode>:<analyzerId>__<optionsSig>`, isolating GA/Preview and synchronous/asynchronous results.
+3. GA uses the stable SDK through `CuGaAdapter`; Preview uses the REST API through `CuPreviewAdapter`.
+4. Asynchronous responses poll `Operation-Location`; synchronous responses are converted into the existing completed-job contract.
+5. Raw JSON is cached unchanged, while `normalizeCuResultForUi()` indexes API metadata, grounding, signatures, document metadata, and segments for the UI.
 
 ---
 
@@ -400,8 +412,8 @@ Each document element type is rendered as a colored layer:
 
 - **Purpose**: Avoid redundant API calls for the same file + model + options combination.
 - **Cache key**: `SHA-256(file_content)` → directory, `base64url(model_id)` → filename.
-- **Options signature**: `SHA-1(json(sorted_options))` appended to model_id as `model_id__sig`.
-- **CU version prefix**: `cu:v8:<analyzer_id>` — version bumped when SDK response format changes.
+- **DI options signature**: `SHA-1(json(sorted_options))` appended to model_id as `model_id__sig`.
+- **CU v9 key**: `cu:v9:<profile>:<apiVersion>:<executionMode>:<analyzerId>__<SHA-256 request signature>`, isolating results by API and execution mode.
 
 ### Local Cache (`ResultCache` in `cache.py`)
 
@@ -639,13 +651,17 @@ queued → running → succeeded / failed
 
 - After `POST /api/analyze` or `POST /api/cu/analyze`, the client receives `{ job: { id, cacheHit } }`.
 - If `cacheHit=true`: result is immediately available.
-- Otherwise: client polls `GET /api/jobs/<id>` at intervals until status is `succeeded` or `failed`.
+- In CU asynchronous mode, input remains unlocked so another document, model, configuration, or analysis can be started while a job runs.
+- Each job retains its starting document and request. If the current input has changed, completion does not overwrite the screen; the result is restored through Open result in the job list.
+- An identical request is not submitted twice while it is active.
+- Otherwise, the client polls `GET /api/jobs/<id>` until status is `succeeded` or `failed`.
 - On success: fetches `GET /api/jobs/<id>/result`.
 
-### Background Threads
+### Analysis Workers
 
-- Analysis runs in `threading.Thread(target=_run_job, daemon=True)`.
-- Daemon threads ensure clean process shutdown.
+- Each server process runs a fixed set of daemon workers (`ANALYSIS_WORKERS`, default 4).
+- Each process bounds its pending queue with `ANALYSIS_QUEUE_SIZE` (default 32); a full queue returns `503 analysis_queue_full`.
+- CU synchronous mode foreground-locks the input pane and renders the result through the existing job contract when the response completes.
 
 ---
 
@@ -826,6 +842,9 @@ PowerShell script that automates the full deployment:
 | `CU_ENDPOINT` | Yes* | — | Content Understanding endpoint URL |
 | `CU_KEY` | Conditional | — | CU API key (required for key/auto mode) |
 | `CU_AUTH_MODE` | No | `auto` | `key` / `identity` / `auto` |
+| `CU_ENABLE_PREVIEW` | No | `false` | Enables the CU Preview API and UI only when set to `true` |
+| `ANALYSIS_WORKERS` | No | `4` | Concurrent analysis workers per process |
+| `ANALYSIS_QUEUE_SIZE` | No | `32` | Maximum pending analysis jobs per process |
 | `STORAGE_BACKEND` | No | `local` | `local` / `blob` |
 | `AZURE_STORAGE_ACCOUNT_NAME` | Conditional | — | Required for blob mode |
 | `AZURE_STORAGE_CONTAINER_NAME` | No | `appstorage` | Blob container name |
@@ -857,8 +876,9 @@ PowerShell script that automates the full deployment:
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/api/cu/models` | List CU prebuilt analyzers (47 analyzers with categories) |
-| `POST` | `/api/cu/analyze` | Start CU analysis job. Body: `{documentId, analyzerId, options}` |
+| `GET` | `/api/cu/capabilities` | List available API profiles, versions, and execution modes |
+| `GET` | `/api/cu/models?apiProfile=<ga\|preview>` | List CU analyzers available under the selected API |
+| `POST` | `/api/cu/analyze` | Start a CU analysis job with `apiProfile`, `executionMode`, `analysisOptions`, and `analyzerOverrides` |
 
 ### Jobs
 

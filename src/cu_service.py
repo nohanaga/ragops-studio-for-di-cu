@@ -3,10 +3,20 @@ import json
 import logging
 import os
 import threading
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from azure.core.credentials import AzureKeyCredential
+from src.cu_catalog import is_preview_only_analyzer, supports_sync
+from src.cu_ga_adapter import CuGaAdapter
+from src.cu_preview_adapter import CuPreviewAdapter, CuPreviewRestError
+from src.cu_types import (
+    CU_API_VERSION_GA,
+    CU_API_VERSION_PREVIEW,
+    CuApiProfile,
+    CuExecutionMode,
+    CuRequestError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -35,69 +45,15 @@ _EXTRA_REST_KEYS: dict[str, str] = {
     "enable_annotations": "enableAnnotations",
 }
 
-# Authentication mode: "key" | "identity" | "auto" (default)
-_AUTH_MODE_KEY = "key"
-_AUTH_MODE_IDENTITY = "identity"
-_AUTH_MODE_AUTO = "auto"
-_VALID_AUTH_MODES = {_AUTH_MODE_KEY, _AUTH_MODE_IDENTITY, _AUTH_MODE_AUTO}
-
-
-def _get_auth_mode() -> str:
-    """Read and normalize the CU_AUTH_MODE environment variable."""
-    mode = os.environ.get("CU_AUTH_MODE", _AUTH_MODE_AUTO).strip().lower()
-    if mode not in _VALID_AUTH_MODES:
-        raise RuntimeError(
-            f"CU_AUTH_MODE value '{mode}' is invalid."
-            f" Valid values: {', '.join(sorted(_VALID_AUTH_MODES))}"
-        )
-    return mode
-
-
-def _build_credential(auth_mode: str):
-    """Return a credential object based on the authentication mode."""
-    endpoint = os.environ.get("CU_ENDPOINT")
-    if not endpoint:
-        raise RuntimeError("CU_ENDPOINT is not set in .env")
-
-    if auth_mode == _AUTH_MODE_KEY:
-        key = os.environ.get("CU_KEY", "").strip()
-        if not key:
-            raise RuntimeError(
-                "CU_AUTH_MODE=key but CU_KEY is not set."
-                " Please set CU_KEY in .env."
-            )
-        return endpoint, AzureKeyCredential(key)
-
-    if auth_mode == _AUTH_MODE_IDENTITY:
-        return endpoint, _get_default_azure_credential()
-
-    # auto: use key auth if CU_KEY is available, otherwise Entra ID
-    key = os.environ.get("CU_KEY", "").strip()
-    if key:
-        return endpoint, AzureKeyCredential(key)
-    return endpoint, _get_default_azure_credential()
-
-
-def _get_default_azure_credential():
-    """Return DefaultAzureCredential. Provide a clear error if azure-identity is not installed."""
-    try:
-        from azure.identity import DefaultAzureCredential  # noqa: WPS433
-    except ImportError as exc:
-        raise RuntimeError(
-            "azure-identity is required for Entra ID authentication.\n"
-            "  pip install azure-identity\n"
-            "Or set CU_AUTH_MODE=key and provide CU_KEY."
-        ) from exc
-    return DefaultAzureCredential()
+_PREVIEW_CONFIG_KEYS: dict[str, str] = {
+    "workflow": "workflow",
+    "allow_in_page_segments": "allowInPageSegments",
+}
 
 
 def _build_client():
-    """Build a ContentUnderstandingClient based on CU_AUTH_MODE."""
-    from azure.ai.contentunderstanding import ContentUnderstandingClient
-
-    auth_mode = _get_auth_mode()
-    endpoint, credential = _build_credential(auth_mode)
-    return ContentUnderstandingClient(endpoint=endpoint, credential=credential)
+    """Build the GA Content Understanding SDK client."""
+    return CuGaAdapter().client
 
 
 def _result_to_dict(result) -> dict[str, Any]:
@@ -116,11 +72,14 @@ def _result_to_dict(result) -> dict[str, Any]:
 # When UI parameters change, a derived analyzer is created from the base
 # analyzer and analysis is performed using that derived analyzer ID.
 
-_known_derived_analyzers: set[str] = set()
+_known_derived_analyzers: set[tuple[str, str, str]] = set()
 _derived_analyzer_lock = threading.Lock()
 
 # In-process cache for _get_root_and_config results
-_analyzer_info_cache: dict[str, tuple[str, dict[str, Any], dict[str, str]]] = {}
+_analyzer_info_cache: dict[
+    tuple[str, str, str], tuple[str, dict[str, Any], dict[str, str]]
+] = {}
+_resolved_workflow_cache: dict[tuple[str, str, str], str] = {}
 
 
 def _extract_config_kwargs(options: dict[str, Any] | None) -> dict[str, Any]:
@@ -149,12 +108,23 @@ def _extract_extra_rest_props(options: dict[str, Any] | None) -> dict[str, Any]:
     return extra
 
 
-def _derived_analyzer_id(source_analyzer_id: str, merged_config: dict[str, Any]) -> str:
+def _derived_analyzer_id(
+    source_analyzer_id: str,
+    merged_config: dict[str, Any],
+    *,
+    api_profile: CuApiProfile,
+) -> str:
     """Return a deterministic derived analyzer ID from source analyzer + merged config."""
     config_json = json.dumps(merged_config, sort_keys=True, default=str)
     h = hashlib.sha256(config_json.encode()).hexdigest()[:16]
-    safe_source = source_analyzer_id.replace("-", "_").replace(".", "_")
-    return f"studio.{safe_source}.{h}"
+    safe_source = source_analyzer_id.replace("-", "_").replace(".", "_")[:30]
+    profile_tag = "p26" if api_profile == "preview" else "g25"
+    return f"studio.{profile_tag}.{safe_source}.{h}"
+
+
+def _cache_identity(api_version: str, analyzer_id: str) -> tuple[str, str, str]:
+    endpoint = os.environ.get("CU_ENDPOINT", "").strip().rstrip("/")
+    return endpoint, api_version, analyzer_id
 
 
 def _get_root_and_config(analyzer_id: str) -> tuple[str, dict[str, Any], dict[str, str]]:
@@ -165,8 +135,9 @@ def _get_root_and_config(analyzer_id: str) -> tuple[str, dict[str, Any], dict[st
     For root analyzers, return (self, {}, models).
     Results are cached in-process.
     """
-    if analyzer_id in _analyzer_info_cache:
-        return _analyzer_info_cache[analyzer_id]
+    cache_key = _cache_identity(CU_API_VERSION_GA, analyzer_id)
+    if cache_key in _analyzer_info_cache:
+        return _analyzer_info_cache[cache_key]
 
     client = _build_client()
     analyzer = client.get_analyzer(analyzer_id)
@@ -182,7 +153,7 @@ def _get_root_and_config(analyzer_id: str) -> tuple[str, dict[str, Any], dict[st
     if not analyzer.base_analyzer_id:
         # Root analyzer
         result = (analyzer_id, {}, models_dict)
-        _analyzer_info_cache[analyzer_id] = result
+        _analyzer_info_cache[cache_key] = result
         return result
 
     # Derived analyzer — get config and traverse up to root
@@ -205,7 +176,7 @@ def _get_root_and_config(analyzer_id: str) -> tuple[str, dict[str, Any], dict[st
             break
         root_id = parent.base_analyzer_id
     result = (root_id, config_dict, models_dict)
-    _analyzer_info_cache[analyzer_id] = result
+    _analyzer_info_cache[cache_key] = result
     return result
 
 
@@ -228,24 +199,9 @@ def _ensure_derived_analyzer(
     # Get root base, original config, and models
     root_base_id, original_config, source_models = _get_root_and_config(source_analyzer_id)
 
-    # Inherit source's models. Only fill in completion from defaults if missing.
-    # Only inherit embedding if the source already has it
-    # (prebuilt-image etc. don't support embedding, so adding it would cause errors)
+    # Inherit only explicit models. Read/Layout/Digital Parse don't need them,
+    # and other analyzers can resolve resource-level defaults.
     models = dict(source_models)  # copy
-    if not models.get("completion"):
-        client = _build_client()
-        defaults = client.get_defaults()
-        if hasattr(defaults, "as_dict"):
-            ddict = defaults.as_dict()
-        else:
-            ddict = {}
-        deployments = ddict.get("modelDeployments", {})
-        for key in ("prebuilt-analyzer-completion",):
-            if deployments.get(key):
-                models["completion"] = deployments[key]
-                break
-        if not models.get("completion"):
-            models["completion"] = "gpt-4.1"
 
     # Merge user-specified overrides onto original config (camelCase)
     # config_kwargs is snake_case, so ContentAnalyzerConfig converts to camelCase
@@ -265,18 +221,27 @@ def _ensure_derived_analyzer(
         return source_analyzer_id
 
     # Include field_schema in the hash input
-    hash_input = dict(merged_config)
+    hash_input: dict[str, Any] = {
+        "apiVersion": CU_API_VERSION_GA,
+        "config": merged_config,
+        "models": models,
+    }
     if field_schema:
-        hash_input["__field_schema__"] = field_schema
-    derived_id = _derived_analyzer_id(source_analyzer_id, hash_input)
+        hash_input["fieldSchema"] = field_schema
+    derived_id = _derived_analyzer_id(
+        source_analyzer_id,
+        hash_input,
+        api_profile="ga",
+    )
+    derived_key = _cache_identity(CU_API_VERSION_GA, derived_id)
 
     # Already verified
-    if derived_id in _known_derived_analyzers:
+    if derived_key in _known_derived_analyzers:
         return derived_id
 
     with _derived_analyzer_lock:
         # Double-check
-        if derived_id in _known_derived_analyzers:
+        if derived_key in _known_derived_analyzers:
             return derived_id
 
         client = _build_client()
@@ -285,7 +250,7 @@ def _ensure_derived_analyzer(
         try:
             existing = client.get_analyzer(derived_id)
             if existing.status and "ready" in str(existing.status).lower():
-                _known_derived_analyzers.add(derived_id)
+                _known_derived_analyzers.add(derived_key)
                 logger.info("Derived analyzer '%s' already exists (ready)", derived_id)
                 return derived_id
             # failed / creating etc. → delete and recreate
@@ -318,8 +283,9 @@ def _ensure_derived_analyzer(
         analyzer_kwargs: dict[str, Any] = {
             "base_analyzer_id": root_base_id,
             "config": merged_config,
-            "models": models,
         }
+        if models:
+            analyzer_kwargs["models"] = models
         if fs_obj is not None:
             analyzer_kwargs["field_schema"] = fs_obj
         analyzer = ContentAnalyzer(**analyzer_kwargs)
@@ -332,7 +298,7 @@ def _ensure_derived_analyzer(
             resource=analyzer,
         )
         poller.result()  # Wait for creation to complete
-        _known_derived_analyzers.add(derived_id)
+        _known_derived_analyzers.add(derived_key)
         logger.info("Derived analyzer '%s' created", derived_id)
         return derived_id
 
@@ -340,14 +306,159 @@ def _ensure_derived_analyzer(
 def _resolve_analyzer(
     base_analyzer_id: str,
     options: dict[str, Any] | None,
+    *,
+    api_profile: CuApiProfile = "ga",
 ) -> str:
     """Return a derived analyzer if options have config changes, otherwise return the base as-is."""
+    if api_profile == "preview":
+        return _ensure_preview_derived_analyzer(base_analyzer_id, options or {})
     config_kwargs = _extract_config_kwargs(options)
     extra_props = _extract_extra_rest_props(options)
     field_schema = (options or {}).get("field_schema")
     if not config_kwargs and not extra_props and not field_schema:
         return base_analyzer_id
     return _ensure_derived_analyzer(base_analyzer_id, config_kwargs, extra_props, field_schema=field_schema)
+
+
+def _preview_config(options: dict[str, Any]) -> dict[str, Any]:
+    config: dict[str, Any] = {}
+    for key in _VALID_CONFIG_KEYS:
+        value = options.get(key)
+        if value not in (None, "", [], {}):
+            config[_snake_to_camel(key)] = value
+    for source_key, rest_key in _EXTRA_REST_KEYS.items():
+        value = options.get(source_key)
+        if value not in (None, "", [], {}):
+            config[rest_key] = value
+    for source_key, rest_key in _PREVIEW_CONFIG_KEYS.items():
+        value = options.get(source_key)
+        if value not in (None, "", [], {}):
+            config[rest_key] = value
+    return config
+
+
+def _snake_to_camel(value: str) -> str:
+    head, *tail = value.split("_")
+    return head + "".join(part[:1].upper() + part[1:] for part in tail)
+
+
+def _get_preview_root_and_config(
+    analyzer_id: str,
+) -> tuple[str, dict[str, Any], dict[str, str]]:
+    cache_key = _cache_identity(CU_API_VERSION_PREVIEW, analyzer_id)
+    if cache_key in _analyzer_info_cache:
+        return _analyzer_info_cache[cache_key]
+
+    adapter = CuPreviewAdapter()
+    analyzer = adapter.get_analyzer(analyzer_id)
+    config = analyzer.get("config")
+    config_dict = dict(config) if isinstance(config, dict) else {}
+    models = analyzer.get("models")
+    models_dict = dict(models) if isinstance(models, dict) else {}
+    workflow = config_dict.get("workflow")
+    if isinstance(workflow, str):
+        _resolved_workflow_cache[cache_key] = workflow
+
+    root_id = analyzer.get("baseAnalyzerId")
+    if not isinstance(root_id, str) or not root_id:
+        result = (analyzer_id, {}, models_dict)
+        _analyzer_info_cache[cache_key] = result
+        return result
+
+    seen = {analyzer_id}
+    for _ in range(7):
+        if root_id in seen:
+            raise CuRequestError("Analyzer inheritance contains a cycle")
+        seen.add(root_id)
+        parent = adapter.get_analyzer(root_id)
+        parent_base = parent.get("baseAnalyzerId")
+        if not isinstance(parent_base, str) or not parent_base:
+            parent_models = parent.get("models")
+            if isinstance(parent_models, dict):
+                models_dict = {**parent_models, **models_dict}
+            break
+        root_id = parent_base
+    result = (root_id, config_dict, models_dict)
+    _analyzer_info_cache[cache_key] = result
+    return result
+
+
+def _ensure_preview_derived_analyzer(
+    source_analyzer_id: str,
+    options: dict[str, Any],
+) -> str:
+    config_overrides = _preview_config(options)
+    field_schema = options.get("field_schema")
+    if not config_overrides and not field_schema:
+        return source_analyzer_id
+
+    root_id, original_config, models = _get_preview_root_and_config(source_analyzer_id)
+    merged_config = {**original_config, **config_overrides}
+    if merged_config == original_config and not field_schema:
+        return source_analyzer_id
+
+    hash_input: dict[str, Any] = {
+        "apiVersion": CU_API_VERSION_PREVIEW,
+        "config": merged_config,
+        "models": models,
+    }
+    if field_schema:
+        hash_input["fieldSchema"] = field_schema
+    derived_id = _derived_analyzer_id(
+        source_analyzer_id,
+        hash_input,
+        api_profile="preview",
+    )
+    derived_key = _cache_identity(CU_API_VERSION_PREVIEW, derived_id)
+    if derived_key in _known_derived_analyzers:
+        return derived_id
+
+    with _derived_analyzer_lock:
+        if derived_key in _known_derived_analyzers:
+            return derived_id
+        adapter = CuPreviewAdapter()
+        try:
+            existing = adapter.get_analyzer(derived_id)
+            status = str(existing.get("status", "")).lower()
+            if "ready" in status:
+                _known_derived_analyzers.add(derived_key)
+                _cache_resolved_workflow(derived_key, existing)
+                return derived_id
+            adapter.delete_analyzer(derived_id)
+        except CuPreviewRestError as exc:
+            if exc.status_code != 404:
+                raise
+
+        resource: dict[str, Any] = {
+            "baseAnalyzerId": root_id,
+            "config": merged_config,
+        }
+        if models:
+            resource["models"] = models
+        if isinstance(field_schema, dict):
+            resource["fieldSchema"] = {
+                "name": f"{derived_id}-schema",
+                "fields": field_schema,
+                "definitions": {},
+            }
+        adapter.create_analyzer(derived_id, resource)
+        created = adapter.get_analyzer(derived_id)
+        _cache_resolved_workflow(derived_key, created)
+        _analyzer_info_cache[derived_key] = (root_id, merged_config, models)
+        _known_derived_analyzers.add(derived_key)
+        return derived_id
+
+
+def _cache_resolved_workflow(
+    cache_key: tuple[str, str, str],
+    analyzer: dict[str, Any],
+) -> None:
+    config = analyzer.get("config")
+    if not isinstance(config, dict):
+        return
+    workflow = config.get("workflow")
+    if isinstance(workflow, str):
+        _resolved_workflow_cache[cache_key] = workflow
 
 
 def analyze_content_url(
@@ -357,19 +468,46 @@ def analyze_content_url(
     content_range: str | None = None,
     processing_location: str | None = None,
     options: dict[str, Any] | None = None,
+    api_profile: CuApiProfile = "ga",
+    execution_mode: CuExecutionMode = "async",
 ) -> dict[str, Any]:
     """Analyze using Content Understanding with a URL."""
-    from azure.ai.contentunderstanding.models import AnalysisInput
-
-    effective_id = _resolve_analyzer(analyzer_id, options)
-    client = _build_client()
-    poller = client.begin_analyze(
-        analyzer_id=effective_id,
-        inputs=[AnalysisInput(url=url, content_range=content_range)],
-        processing_location=processing_location,
+    options = options or {}
+    _validate_execution(
+        analyzer_id=analyzer_id,
+        api_profile=api_profile,
+        execution_mode=execution_mode,
+        options=options,
     )
-    result = poller.result()
-    return _result_to_dict(result)
+    effective_id = _resolve_analyzer(
+        analyzer_id,
+        options,
+        api_profile=api_profile,
+    )
+    if api_profile == "preview":
+        result_dict = CuPreviewAdapter().analyze_url(
+            analyzer_id=effective_id,
+            url=url,
+            content_range=content_range,
+            processing_location=processing_location,
+            execution_mode=execution_mode,
+        )
+    else:
+        result = CuGaAdapter().analyze_url(
+            analyzer_id=effective_id,
+            url=url,
+            content_range=content_range,
+            processing_location=processing_location,
+        )
+        result_dict = _result_to_dict(result)
+    return _attach_studio_metadata(
+        result_dict,
+        requested_analyzer_id=analyzer_id,
+        effective_analyzer_id=effective_id,
+        api_profile=api_profile,
+        execution_mode=execution_mode,
+        options=options,
+    )
 
 
 def analyze_content_file(
@@ -379,6 +517,8 @@ def analyze_content_file(
     content_range: str | None = None,
     processing_location: str | None = None,
     options: dict[str, Any] | None = None,
+    api_profile: CuApiProfile = "ga",
+    execution_mode: CuExecutionMode = "async",
 ) -> dict[str, Any]:
     """Analyze using a local file path."""
     import mimetypes
@@ -395,6 +535,8 @@ def analyze_content_file(
         content_range=content_range,
         processing_location=processing_location,
         options=options,
+        api_profile=api_profile,
+        execution_mode=execution_mode,
     )
 
 
@@ -406,21 +548,197 @@ def analyze_content_bytes(
     content_range: str | None = None,
     processing_location: str | None = None,
     options: dict[str, Any] | None = None,
+    api_profile: CuApiProfile = "ga",
+    execution_mode: CuExecutionMode = "async",
 ) -> dict[str, Any]:
     """Analyze by passing raw bytes directly (for Blob Storage backend)."""
-    effective_id = _resolve_analyzer(analyzer_id, options)
-    client = _build_client()
-    poller = client.begin_analyze_binary(
-        analyzer_id=effective_id,
-        binary_input=content,
-        content_type=content_type,
-        content_range=content_range,
-        processing_location=processing_location,
+    options = options or {}
+    _validate_execution(
+        analyzer_id=analyzer_id,
+        api_profile=api_profile,
+        execution_mode=execution_mode,
+        options=options,
     )
-    result = poller.result()
-    return _result_to_dict(result)
+    effective_id = _resolve_analyzer(
+        analyzer_id,
+        options,
+        api_profile=api_profile,
+    )
+    if api_profile == "preview":
+        result_dict = CuPreviewAdapter().analyze_binary(
+            analyzer_id=effective_id,
+            content=content,
+            content_type=content_type,
+            content_range=content_range,
+            processing_location=processing_location,
+            execution_mode=execution_mode,
+        )
+    else:
+        result = CuGaAdapter().analyze_binary(
+            analyzer_id=effective_id,
+            content=content,
+            content_type=content_type,
+            content_range=content_range,
+            processing_location=processing_location,
+        )
+        result_dict = _result_to_dict(result)
+    return _attach_studio_metadata(
+        result_dict,
+        requested_analyzer_id=analyzer_id,
+        effective_analyzer_id=effective_id,
+        api_profile=api_profile,
+        execution_mode=execution_mode,
+        options=options,
+    )
+
+
+def _validate_execution(
+    *,
+    analyzer_id: str,
+    api_profile: CuApiProfile,
+    execution_mode: CuExecutionMode,
+    options: dict[str, Any],
+) -> None:
+    if api_profile == "preview" and not is_cu_preview_enabled():
+        raise CuRequestError(
+            "Content Understanding Preview is disabled",
+            code="preview_disabled",
+        )
+    if api_profile == "ga" and is_preview_only_analyzer(analyzer_id):
+        raise CuRequestError(
+            f"{analyzer_id} requires the Preview API profile",
+            code="unsupported_analyzer",
+        )
+    if execution_mode == "sync":
+        if api_profile != "preview":
+            raise CuRequestError(
+                "Synchronous analysis requires the Preview API profile",
+                code="unsupported_execution_mode",
+            )
+        if not supports_sync(analyzer_id):
+            raise CuRequestError(
+                "Synchronous analysis supports only prebuilt-read and prebuilt-layout",
+                code="unsupported_analyzer",
+            )
+        config_options = {
+            key: value
+            for key, value in options.items()
+            if key not in {"content_range", "processing_location"}
+            and value not in (None, "", [], {})
+        }
+        if config_options:
+            raise CuRequestError(
+                "Synchronous analysis does not support derived analyzer overrides",
+                code="unsupported_sync_overrides",
+            )
+
+    if api_profile == "ga" and any(
+        options.get(key) not in (None, "", [], {}) for key in _PREVIEW_CONFIG_KEYS
+    ):
+        raise CuRequestError(
+            "Preview analyzer settings require apiProfile=preview",
+            code="unsupported_feature",
+        )
+
+    if options.get("allow_in_page_segments") is True:
+        if options.get("enable_segment") is not True:
+            raise CuRequestError(
+                "allowInPageSegments requires enableSegment=true",
+                code="invalid_segmentation_config",
+            )
+        if options.get("segment_per_page") is True:
+            raise CuRequestError(
+                "allowInPageSegments and segmentPerPage are mutually exclusive",
+                code="invalid_segmentation_config",
+            )
+
+    if options.get("workflow") == "agentic":
+        if analyzer_id.startswith(("prebuilt-audio", "prebuilt-video", "prebuilt-image")):
+            raise CuRequestError(
+                "Agentic workflow supports document analyzers only",
+                code="unsupported_modality",
+            )
+        if _contains_extract_method(options.get("field_schema")):
+            raise CuRequestError(
+                "Agentic workflow does not support fields using method=extract",
+                code="invalid_field_method",
+            )
+
+
+def validate_cu_request(
+    *,
+    analyzer_id: str,
+    api_profile: CuApiProfile,
+    execution_mode: CuExecutionMode,
+    options: dict[str, Any],
+) -> None:
+    _validate_execution(
+        analyzer_id=analyzer_id,
+        api_profile=api_profile,
+        execution_mode=execution_mode,
+        options=options,
+    )
+
+
+def _contains_extract_method(value: Any) -> bool:
+    if isinstance(value, dict):
+        if str(value.get("method", "")).lower() == "extract":
+            return True
+        return any(_contains_extract_method(item) for item in value.values())
+    if isinstance(value, list):
+        return any(_contains_extract_method(item) for item in value)
+    return False
+
+
+def _attach_studio_metadata(
+    result: dict[str, Any],
+    *,
+    requested_analyzer_id: str,
+    effective_analyzer_id: str,
+    api_profile: CuApiProfile,
+    execution_mode: CuExecutionMode,
+    options: dict[str, Any],
+) -> dict[str, Any]:
+    api_version = (
+        CU_API_VERSION_PREVIEW if api_profile == "preview" else CU_API_VERSION_GA
+    )
+    config_hash = hashlib.sha256(
+        json.dumps(
+            {
+                "apiVersion": api_version,
+                "analyzerId": requested_analyzer_id,
+                "options": options,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+            default=str,
+        ).encode("utf-8")
+    ).hexdigest()
+    workflow = _resolved_workflow_cache.get(
+        _cache_identity(api_version, effective_analyzer_id)
+    )
+    result["_studio"] = {
+        "requestedAnalyzerId": requested_analyzer_id,
+        "effectiveAnalyzerId": effective_analyzer_id,
+        "apiProfile": api_profile,
+        "apiVersion": api_version,
+        "executionMode": execution_mode,
+        "resolvedWorkflow": workflow,
+        "analyzerConfigHash": config_hash,
+        "analyzedAt": datetime.now(timezone.utc).isoformat(),
+    }
+    return result
 
 
 def is_cu_configured() -> bool:
     """Check if the Content Understanding endpoint is configured."""
     return bool(os.environ.get("CU_ENDPOINT", "").strip())
+
+
+def is_cu_preview_enabled() -> bool:
+    return os.environ.get("CU_ENABLE_PREVIEW", "false").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }

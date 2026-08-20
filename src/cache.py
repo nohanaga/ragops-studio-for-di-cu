@@ -81,11 +81,18 @@ class ResultCache:
             mid = _decode_model_id(encoded_key)
             if not mid:
                 continue
-            # Determine service prefix and strip internal version tags
-            # CU cache keys: "cu:v8:analyzerName" or "cu:v8:analyzerName__sig"
+            # Determine service prefix and strip internal version tags.
             if mid.startswith("cu:"):
-                core = re.sub(r"^cu:(?:v\d+:)?", "", mid)
-                svc = "CU"
+                v9_match = re.match(
+                    r"^cu:v9:(ga|preview):([^:]+):(async|sync):(.+)$",
+                    mid,
+                )
+                if v9_match:
+                    profile, _api_version, mode, core = v9_match.groups()
+                    svc = f"CU {profile.upper()}/{mode}"
+                else:
+                    core = re.sub(r"^cu:(?:v\d+:)?", "", mid)
+                    svc = "CU legacy"
             else:
                 core = mid
                 svc = "DI"

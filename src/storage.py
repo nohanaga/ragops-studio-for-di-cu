@@ -67,6 +67,16 @@ class DocumentStore:
 
     def get(self, document_id: str) -> StoredDocument | None:
         with self._lock:
+            doc = self._docs.get(document_id)
+        if doc is not None:
+            return doc
+        self._load_index()
+        with self._lock:
+            doc = self._docs.get(document_id)
+        if doc is not None:
+            return doc
+        self._scan_upload_dir()
+        with self._lock:
             return self._docs.get(document_id)
 
     def list_documents(self) -> list[StoredDocument]:
@@ -215,45 +225,70 @@ def _sha256_file(path: Path) -> str:
 class JobStore:
     def __init__(self, *, result_dir: Path):
         self._result_dir = result_dir
+        self._metadata_dir = result_dir / "jobs"
+        self._metadata_dir.mkdir(parents=True, exist_ok=True)
         self._jobs: dict[str, dict[str, Any]] = {}
         self._lock = threading.Lock()
 
     def create(self, *, job_id: str, document_id: str, model_id: str) -> None:
-        with self._lock:
-            self._jobs[job_id] = {
-                "id": job_id,
-                "documentId": document_id,
-                "modelId": model_id,
-                "status": "queued",
-                "error": None,
-                "createdAt": _now_ms(),
-                "updatedAt": _now_ms(),
-            }
+        job = {
+            "id": job_id,
+            "documentId": document_id,
+            "modelId": model_id,
+            "status": "queued",
+            "error": None,
+            "createdAt": _now_ms(),
+            "updatedAt": _now_ms(),
+        }
+        self._save_job(job)
 
     def set_running(self, job_id: str) -> None:
-        with self._lock:
-            self._jobs[job_id]["status"] = "running"
-            self._jobs[job_id]["updatedAt"] = _now_ms()
+        self._update_job(job_id, status="running")
 
     def set_failed(self, *, job_id: str, error: str) -> None:
-        with self._lock:
-            self._jobs[job_id]["status"] = "failed"
-            self._jobs[job_id]["error"] = error
-            self._jobs[job_id]["updatedAt"] = _now_ms()
+        self._update_job(job_id, status="failed", error=error)
 
     def set_succeeded(self, *, job_id: str, result: dict[str, Any]) -> None:
         result_path = self._result_dir / f"{job_id}.json"
         with result_path.open("w", encoding="utf-8") as f:
             json.dump(result, f, ensure_ascii=False, indent=2)
 
-        with self._lock:
-            self._jobs[job_id]["status"] = "succeeded"
-            self._jobs[job_id]["updatedAt"] = _now_ms()
+        self._update_job(job_id, status="succeeded", error=None)
 
     def get(self, job_id: str) -> dict[str, Any] | None:
+        metadata_path = self._metadata_path(job_id)
+        try:
+            with metadata_path.open("r", encoding="utf-8") as f:
+                job = json.load(f)
+            if isinstance(job, dict):
+                return job
+        except (OSError, ValueError):
+            pass
         with self._lock:
             job = self._jobs.get(job_id)
             return dict(job) if job else None
+
+    def _metadata_path(self, job_id: str) -> Path:
+        safe_job_id = re.sub(r"[^0-9a-fA-F-]", "", job_id)
+        return self._metadata_dir / f"{safe_job_id}.json"
+
+    def _save_job(self, job: dict[str, Any]) -> None:
+        path = self._metadata_path(str(job["id"]))
+        temp_path = path.with_name(f"{path.name}.{uuid.uuid4().hex}.tmp")
+        with self._lock:
+            self._jobs[str(job["id"])] = dict(job)
+            with temp_path.open("w", encoding="utf-8") as f:
+                json.dump(job, f, ensure_ascii=False, indent=2)
+            temp_path.replace(path)
+
+    def _update_job(self, job_id: str, *, status: str, error: str | None = None) -> None:
+        job = self.get(job_id)
+        if job is None:
+            return
+        job["status"] = status
+        job["error"] = error
+        job["updatedAt"] = _now_ms()
+        self._save_job(job)
 
     def load_result(self, job_id: str) -> dict[str, Any] | None:
         """Load the result JSON for a succeeded job."""

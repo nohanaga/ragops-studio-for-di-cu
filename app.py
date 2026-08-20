@@ -1,6 +1,8 @@
 import hashlib
 import json
+import logging
 import os
+import queue
 import re
 import secrets
 import threading
@@ -12,7 +14,15 @@ from dotenv import load_dotenv
 from flask import Flask, g, jsonify, render_template, request, send_file, send_from_directory
 
 from src.di_service import analyze_document_file, analyze_document_bytes
-from src.cu_service import analyze_content_file, analyze_content_bytes, is_cu_configured
+from src.cu_catalog import build_capabilities, list_cu_models as get_cu_models
+from src.cu_service import (
+    analyze_content_bytes,
+    analyze_content_file,
+    is_cu_configured,
+    is_cu_preview_enabled,
+    validate_cu_request,
+)
+from src.cu_types import CuAnalyzeRequest, CuRequestError
 from src.cache import ResultCache
 from src.storage import DocumentStore, JobStore
 
@@ -24,10 +34,49 @@ UPLOADS_DIR = STORAGE_DIR / "uploads"
 RESULTS_DIR = STORAGE_DIR / "results"
 CACHE_DIR = STORAGE_DIR / "cache"
 USERTAB_DIR = APP_ROOT / "usertab"
+logger = logging.getLogger(__name__)
+
+
+class AnalysisJobExecutor:
+    def __init__(self, *, max_workers: int, max_queue_size: int) -> None:
+        self._queue: queue.Queue[Any] = queue.Queue(maxsize=max_queue_size)
+        for index in range(max_workers):
+            threading.Thread(
+                target=self._run_worker,
+                name=f"analysis-worker-{index + 1}",
+                daemon=True,
+            ).start()
+
+    def submit(self, job: Any) -> bool:
+        try:
+            self._queue.put_nowait(job)
+        except queue.Full:
+            return False
+        return True
+
+    def _run_worker(self) -> None:
+        while True:
+            job = self._queue.get()
+            try:
+                job()
+            except Exception:
+                logger.exception("Unhandled analysis worker error")
+            finally:
+                self._queue.task_done()
 
 
 def create_app() -> Flask:
     app = Flask(__name__, static_folder="static", template_folder="templates")
+
+    analysis_workers = max(1, int(os.getenv("ANALYSIS_WORKERS", "4")))
+    analysis_queue_size = max(
+        analysis_workers,
+        int(os.getenv("ANALYSIS_QUEUE_SIZE", "32")),
+    )
+    analysis_executor = AnalysisJobExecutor(
+        max_workers=analysis_workers,
+        max_queue_size=analysis_queue_size,
+    )
 
     STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "local").strip().lower()
 
@@ -86,6 +135,7 @@ def create_app() -> Flask:
         UI_DEFAULT_LANG = "ja"
 
     CU_ENABLED = is_cu_configured()
+    CU_PREVIEW_ENABLED = is_cu_preview_enabled()
 
     @app.get("/")
     def index():
@@ -146,6 +196,37 @@ def create_app() -> Flask:
         raw = json.dumps(filtered, sort_keys=True, separators=(",", ":"))
         return hashlib.sha1(raw.encode("utf-8")).hexdigest()  # noqa: S324 (demo)
 
+    def _cu_cache_model_id(cu_request: CuAnalyzeRequest) -> str:
+        signature_input = {
+            "analysisOptions": cu_request.analysis_options,
+            "analyzerOverrides": cu_request.analyzer_overrides,
+        }
+
+        def _has_meaningful_value(value: Any) -> bool:
+            if isinstance(value, dict):
+                return any(_has_meaningful_value(item) for item in value.values())
+            if isinstance(value, (list, tuple, set)):
+                return any(_has_meaningful_value(item) for item in value)
+            return value is not None and value != ""
+
+        has_options = _has_meaningful_value(signature_input)
+        signature_json = json.dumps(
+            signature_input,
+            sort_keys=True,
+            separators=(",", ":"),
+            default=str,
+        )
+        sig = (
+            hashlib.sha256(signature_json.encode("utf-8")).hexdigest()
+            if has_options
+            else ""
+        )
+        cache_base = (
+            f"cu:v9:{cu_request.api_profile}:{cu_request.api_version}:"
+            f"{cu_request.execution_mode}:{cu_request.analyzer_id}"
+        )
+        return f"{cache_base}__{sig}" if sig else cache_base
+
     def _library_items() -> list[dict[str, Any]]:
         items: list[dict[str, Any]] = []
         for fh in cache.list_file_hashes():
@@ -177,11 +258,21 @@ def create_app() -> Flask:
     def cache_exists():
         body = request.get_json(silent=True) or {}
         file_hash = body.get("fileHash")
-        model_id = body.get("modelId")
-        options = body.get("options") or {}
-        if not file_hash or not model_id:
+        if not file_hash:
             return jsonify({"error": "fileHash and modelId are required"}), 400
 
+        if body.get("service") == "cu":
+            try:
+                cu_request = CuAnalyzeRequest.from_payload(body)
+                cache_model_id = _cu_cache_model_id(cu_request)
+            except CuRequestError as exc:
+                return jsonify({"error": str(exc), "code": exc.code}), 400
+            return jsonify({"exists": cache.has(file_hash=file_hash, model_id=cache_model_id)})
+
+        model_id = body.get("modelId")
+        options = body.get("options") or {}
+        if not model_id:
+            return jsonify({"error": "fileHash and modelId are required"}), 400
         sig = _options_signature(options)
         cache_model_id = f"{model_id}__{sig}" if sig else model_id
         return jsonify({"exists": cache.has(file_hash=file_hash, model_id=cache_model_id)})
@@ -323,7 +414,9 @@ def create_app() -> Flask:
             except Exception as ex:  # noqa: BLE001 (sample app)
                 job_store.set_failed(job_id=job_id, error=str(ex))
 
-        threading.Thread(target=_run_job, daemon=True).start()
+        if not analysis_executor.submit(_run_job):
+            job_store.set_failed(job_id=job_id, error="Analysis queue is full")
+            return jsonify({"error": "analysis queue is full", "code": "analysis_queue_full"}), 503
         return jsonify({"job": {"id": job_id, "cacheHit": False}})
 
     @app.get("/api/jobs/<job_id>")
@@ -347,71 +440,21 @@ def create_app() -> Flask:
         return jsonify({"result": result})
 
     # ── Content Understanding API ──────────────────────────────
+    @app.get("/api/cu/capabilities")
+    def get_cu_capabilities():
+        return jsonify(build_capabilities(preview_enabled=CU_PREVIEW_ENABLED))
+
     @app.get("/api/cu/models")
     def list_cu_models():
         if not CU_ENABLED:
             return jsonify({"models": []})
-        models = [
-            # ── Content Extraction ──
-            {"id": "prebuilt-read", "cat": "extraction"},
-            {"id": "prebuilt-layout", "cat": "extraction"},
-            # ── Base ──
-            {"id": "prebuilt-document", "cat": "base"},
-            {"id": "prebuilt-image", "cat": "base", "needsSchema": True},
-            {"id": "prebuilt-audio", "cat": "base", "needsSchema": True},
-            {"id": "prebuilt-video", "cat": "base", "needsSchema": True},
-            # ── RAG ──
-            {"id": "prebuilt-documentSearch", "cat": "rag"},
-            {"id": "prebuilt-imageSearch", "cat": "rag", "needsSchema": True},
-            {"id": "prebuilt-audioSearch", "cat": "rag", "needsSchema": True},
-            {"id": "prebuilt-videoSearch", "cat": "rag", "needsSchema": True},
-            # ── Financial ──
-            {"id": "prebuilt-invoice", "cat": "financial"},
-            {"id": "prebuilt-receipt", "cat": "financial"},
-            {"id": "prebuilt-receipt.generic", "cat": "financial"},
-            {"id": "prebuilt-receipt.hotel", "cat": "financial"},
-            {"id": "prebuilt-creditCard", "cat": "financial"},
-            {"id": "prebuilt-creditMemo", "cat": "financial"},
-            {"id": "prebuilt-check.us", "cat": "financial", "us": True},
-            {"id": "prebuilt-bankStatement.us", "cat": "financial", "us": True},
-            # ── Identity ──
-            {"id": "prebuilt-idDocument", "cat": "identity"},
-            {"id": "prebuilt-idDocument.generic", "cat": "identity"},
-            {"id": "prebuilt-idDocument.passport", "cat": "identity"},
-            {"id": "prebuilt-healthInsuranceCard.us", "cat": "identity", "us": True},
-            # ── US Tax ──
-            {"id": "prebuilt-tax.us", "cat": "tax", "us": True},
-            {"id": "prebuilt-tax.us.w2", "cat": "tax", "us": True},
-            {"id": "prebuilt-tax.us.w4", "cat": "tax", "us": True},
-            {"id": "prebuilt-tax.us.1040", "cat": "tax", "us": True},
-            {"id": "prebuilt-tax.us.1095A", "cat": "tax", "us": True},
-            {"id": "prebuilt-tax.us.1095C", "cat": "tax", "us": True},
-            {"id": "prebuilt-tax.us.1098", "cat": "tax", "us": True},
-            {"id": "prebuilt-tax.us.1098E", "cat": "tax", "us": True},
-            {"id": "prebuilt-tax.us.1098T", "cat": "tax", "us": True},
-            {"id": "prebuilt-tax.us.1099Combo", "cat": "tax", "us": True},
-            {"id": "prebuilt-tax.us.1099SSA", "cat": "tax", "us": True},
-            # ── US Mortgage ──
-            {"id": "prebuilt-mortgage.us", "cat": "mortgage", "us": True},
-            {"id": "prebuilt-mortgage.us.1003", "cat": "mortgage", "us": True},
-            {"id": "prebuilt-mortgage.us.1004", "cat": "mortgage", "us": True},
-            {"id": "prebuilt-mortgage.us.1005", "cat": "mortgage", "us": True},
-            {"id": "prebuilt-mortgage.us.1008", "cat": "mortgage", "us": True},
-            {"id": "prebuilt-mortgage.us.closingDisclosure", "cat": "mortgage", "us": True},
-            # ── Legal & Business ──
-            {"id": "prebuilt-contract", "cat": "legal"},
-            {"id": "prebuilt-marriageCertificate.us", "cat": "legal", "us": True},
-            # ── Procurement ──
-            {"id": "prebuilt-procurement", "cat": "procurement"},
-            {"id": "prebuilt-purchaseOrder", "cat": "procurement"},
-            # ── Other ──
-            {"id": "prebuilt-payStub.us", "cat": "other", "us": True},
-            {"id": "prebuilt-utilityBill", "cat": "other"},
-            # ── Utility ──
-            {"id": "prebuilt-documentFieldSchema", "cat": "utility", "needsSchema": True},
-            {"id": "prebuilt-documentFields", "cat": "utility", "needsSchema": True},
-        ]
-        return jsonify({"models": models})
+        requested_profile = request.args.get("apiProfile", "ga")
+        if requested_profile not in {"ga", "preview"}:
+            return jsonify({"error": "apiProfile must be 'ga' or 'preview'"}), 400
+        if requested_profile == "preview" and not CU_PREVIEW_ENABLED:
+            return jsonify({"error": "Content Understanding Preview is disabled"}), 400
+        api_profile = "preview" if requested_profile == "preview" else "ga"
+        return jsonify({"models": get_cu_models(api_profile)})
 
     @app.post("/api/cu/analyze")
     def cu_analyze():
@@ -419,36 +462,36 @@ def create_app() -> Flask:
             return jsonify({"error": "Content Understanding is not configured (CU_ENDPOINT missing)"}), 503
 
         body = request.get_json(silent=True) or {}
-        document_id = body.get("documentId")
-        analyzer_id = body.get("analyzerId")
-        options = body.get("options") or {}
+        try:
+            cu_request = CuAnalyzeRequest.from_payload(body)
+            options = cu_request.legacy_options
+            validate_cu_request(
+                analyzer_id=cu_request.analyzer_id,
+                api_profile=cu_request.api_profile,
+                execution_mode=cu_request.execution_mode,
+                options=options,
+            )
+        except CuRequestError as exc:
+            return jsonify({"error": str(exc), "code": exc.code}), 400
 
-        if not document_id:
-            return jsonify({"error": "documentId is required"}), 400
-        if not analyzer_id:
-            return jsonify({"error": "analyzerId is required"}), 400
-
-        doc = document_store.get(document_id)
+        doc = document_store.get(cu_request.document_id)
         if doc is None:
             return jsonify({"error": "document not found"}), 404
 
-        sig = _options_signature(options)
         if "content_categories" in options and not isinstance(options.get("content_categories"), dict):
             return jsonify({"error": "options.content_categories must be an object"}), 400
 
-        # "cu:v8:" is the cache schema version. Bump this version when the CU SDK
-        # response format changes to avoid collisions with stale cached data.
-        cache_model_id = f"cu:v8:{analyzer_id}__{sig}" if sig else f"cu:v8:{analyzer_id}"
+        cache_model_id = _cu_cache_model_id(cu_request)
 
         if doc.file_hash and cache.has(file_hash=doc.file_hash, model_id=cache_model_id):
             job_id = str(uuid.uuid4())
-            job_store.create(job_id=job_id, document_id=document_id, model_id=cache_model_id)
+            job_store.create(job_id=job_id, document_id=cu_request.document_id, model_id=cache_model_id)
             cached = cache.load(file_hash=doc.file_hash, model_id=cache_model_id)
             job_store.set_succeeded(job_id=job_id, result=cached)
             return jsonify({"job": {"id": job_id, "cacheHit": True}})
 
         job_id = str(uuid.uuid4())
-        job_store.create(job_id=job_id, document_id=document_id, model_id=cache_model_id)
+        job_store.create(job_id=job_id, document_id=cu_request.document_id, model_id=cache_model_id)
 
         def _run_cu_job():
             job_store.set_running(job_id)
@@ -456,10 +499,12 @@ def create_app() -> Flask:
                 if doc.path and doc.path.exists():
                     result_dict = analyze_content_file(
                         file_path=doc.path,
-                        analyzer_id=analyzer_id,
+                        analyzer_id=cu_request.analyzer_id,
                         content_range=options.get("content_range"),
                         processing_location=options.get("processing_location"),
                         options=options,
+                        api_profile=cu_request.api_profile,
+                        execution_mode=cu_request.execution_mode,
                     )
                 else:
                     file_bytes = document_store.get_content(doc.document_id)
@@ -468,11 +513,13 @@ def create_app() -> Flask:
                         return
                     result_dict = analyze_content_bytes(
                         content=file_bytes,
-                        analyzer_id=analyzer_id,
+                        analyzer_id=cu_request.analyzer_id,
                         content_type=doc.content_type or "application/octet-stream",
                         content_range=options.get("content_range"),
                         processing_location=options.get("processing_location"),
                         options=options,
+                        api_profile=cu_request.api_profile,
+                        execution_mode=cu_request.execution_mode,
                     )
                 if doc.file_hash:
                     cache.save(file_hash=doc.file_hash, model_id=cache_model_id, result=result_dict, options=options)
@@ -480,7 +527,12 @@ def create_app() -> Flask:
             except Exception as ex:  # noqa: BLE001
                 job_store.set_failed(job_id=job_id, error=str(ex))
 
-        threading.Thread(target=_run_cu_job, daemon=True).start()
+        if cu_request.execution_mode == "sync":
+            _run_cu_job()
+        else:
+            if not analysis_executor.submit(_run_cu_job):
+                job_store.set_failed(job_id=job_id, error="Analysis queue is full")
+                return jsonify({"error": "analysis queue is full", "code": "analysis_queue_full"}), 503
         return jsonify({"job": {"id": job_id, "cacheHit": False}})
 
     # ── User Tabs ───────────────────────────────────────────────
@@ -543,8 +595,25 @@ def create_app() -> Flask:
 if __name__ == "__main__":
     app = create_app()
     host = os.getenv("HOST", "0.0.0.0")
-    port = int(os.getenv("PORT", "5000"))
-    app.run(host=host, port=port)
+    port = int(os.getenv("PORT", "5003"))
+    debug = os.getenv("APP_DEBUG", "false").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    use_reloader = os.getenv("APP_USE_RELOADER", "false").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    app.run(
+        host=host,
+        port=port,
+        debug=debug,
+        use_reloader=use_reloader,
+    )
 
 
 

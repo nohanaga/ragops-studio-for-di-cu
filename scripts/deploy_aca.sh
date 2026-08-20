@@ -38,6 +38,7 @@ DI_RESOURCE_GROUP_NAME=""
 CU_ENDPOINT_PARAM=""
 CU_KEY_PARAM=""
 CU_AUTH_MODE="key"
+CU_ENABLE_PREVIEW="false"
 CU_RESOURCE_NAME=""
 CU_RESOURCE_GROUP_NAME=""
 
@@ -89,6 +90,7 @@ Authentication:
 
 App settings:
   --uploads-enabled true|false Enable file uploads (default: true)
+    --cu-enable-preview true|false Enable prerelease CU API features (default: false)
 
   -h, --help                  Show this help
 EOF
@@ -122,6 +124,7 @@ while [[ $# -gt 0 ]]; do
         --cu-endpoint)          CU_ENDPOINT_PARAM="$2"; shift 2 ;;
         --cu-key)               CU_KEY_PARAM="$2"; shift 2 ;;
         --cu-auth-mode)         CU_AUTH_MODE="$2"; shift 2 ;;
+        --cu-enable-preview)    CU_ENABLE_PREVIEW="$2"; shift 2 ;;
         --cu-resource-name)     CU_RESOURCE_NAME="$2"; shift 2 ;;
         --cu-resource-group)    CU_RESOURCE_GROUP_NAME="$2"; shift 2 ;;
         -h|--help)              usage ;;
@@ -442,7 +445,7 @@ if [[ "$APP_EXISTS" == "false" ]]; then
     fi
 
     # Build env vars list
-    ENV_VARS=("UPLOADS_ENABLED=${UPLOADS_ENV_VALUE}")
+    ENV_VARS=("UPLOADS_ENABLED=${UPLOADS_ENV_VALUE}" "CU_ENABLE_PREVIEW=${CU_ENABLE_PREVIEW}")
     if $DI_CONFIGURED; then
         if [[ "$DI_AUTH_MODE" == "identity" ]]; then
             ENV_VARS+=("DI_ENDPOINT=${DI_S_ENDPOINT}" "DI_AUTH_MODE=identity")
@@ -545,7 +548,7 @@ else
     fi
 
     # ── Build env vars ────────────────────────────────────────
-    SET_ENV_VARS=("UPLOADS_ENABLED=${UPLOADS_ENV_VALUE}")
+    SET_ENV_VARS=("UPLOADS_ENABLED=${UPLOADS_ENV_VALUE}" "CU_ENABLE_PREVIEW=${CU_ENABLE_PREVIEW}")
     if $ANY_DI_INPUT; then
         SET_ENV_VARS+=("DI_AUTH_MODE=${DI_AUTH_MODE}")
         if [[ "$DI_AUTH_MODE" == "identity" ]]; then

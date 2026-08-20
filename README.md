@@ -49,9 +49,10 @@ All results are cached (file SHA-256 + model + options SHA-1), so you can iterat
 
 ### Analysis & iteration
 - Studio-like workflow: pick a file → select a model → Analyze → view Summary / Items / JSON
-- Job execution: background thread SDK calls → poll by job ID → render results
+- CU asynchronous mode: fixed workers run jobs while other documents, models, and settings remain usable; completed results stay available in the job list
+- CU synchronous mode: Read/Layout runs in the foreground and locks the input context until completion
 - DI analysis options: `ocrHighResolution` / `formulas` / `barcodes` / `styleFont` / `pages` / `locale` / `output_content_format` / `query_fields`, etc.
-- CU analysis options: 16 of 18 Processing Configuration parameters supported (89% coverage)
+- CU analysis options: GA configuration plus Preview agentic workflow and in-page segmentation
 - CU derived analyzer auto-management: when options change, automatically creates `studio.<source>.<hash>` derived analyzers
 
 ### Visual inspection
@@ -135,6 +136,11 @@ DI_KEY=<your-di-key>          # not needed for identity mode
 # CU_ENDPOINT=https://<your-cu>.cognitiveservices.azure.com/
 # CU_KEY=<your-cu-key>
 # CU_AUTH_MODE=auto
+# CU_ENABLE_PREVIEW=false      # Set true to explicitly enable 2026-06-01-preview
+
+# Analysis jobs
+# ANALYSIS_WORKERS=4           # Concurrent analyses per process
+# ANALYSIS_QUEUE_SIZE=32       # Pending jobs per process
 
 # Storage (default: local)
 # STORAGE_BACKEND=local        # local / blob
@@ -145,6 +151,16 @@ DI_KEY=<your-di-key>          # not needed for identity mode
 # UPLOADS_ENABLED=true         # set false to disable uploads
 # UI_DEFAULT_LANG=ja           # ja / en
 ```
+
+### Content Understanding API profiles
+
+- The default profile is GA `2025-11-01`. The Python SDK is pinned to `azure-ai-contentunderstanding>=1.1.0,<1.2.0`.
+- Preview `2026-06-01-preview` appears in the UI only when `CU_ENABLE_PREVIEW=true`. Preview requests never fall back to GA automatically.
+- Preview enables synchronous Read/Layout analysis, agentic workflow, in-page segmentation, and Preview tax analyzers. Preview is prerelease and has no SLA.
+- Results record the API version, execution mode, and effective analyzer, and expose signatures, document metadata, segments, and field grounding.
+- For Azure Container Apps deployments, set the same feature flag with PowerShell `-CuEnablePreview $true` or Bash `--cu-enable-preview true`.
+
+Official documentation: [What's new in Content Understanding](https://learn.microsoft.com/azure/ai-services/content-understanding/whats-new), [Synchronous REST API](https://learn.microsoft.com/azure/ai-services/content-understanding/quickstart/use-synchronous-rest-api)
 
 ## Run
 

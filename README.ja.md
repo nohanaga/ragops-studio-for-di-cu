@@ -51,9 +51,10 @@ RAGOps Studio は、この **解析品質の継続的な観測・比較・改善
 
 ### 解析 & イテレーション
 - Studio 風ワークフロー: ファイル選択 → モデル選択 → Analyze → Summary / Items / JSON 表示
-- ジョブ実行: バックグラウンドスレッドで SDK 呼び出し → ポーリングで結果表示
+- CU 非同期モード: 固定ワーカーで実行し、待機中も別文書・モデル・設定を操作可能。完了結果はジョブ一覧から復帰
+- CU 同期モード: Read/Layout を前景実行し、入力コンテキストを完了までロック
 - DI 解析オプション: `ocrHighResolution` / `formulas` / `barcodes` / `styleFont` / `pages` / `locale` / `output_content_format` / `query_fields` 等
-- CU 解析オプション: 18 種の Processing Configuration のうち 16 種に対応（89%カバレッジ）
+- CU 解析オプション: GA 設定に加え、Preview の Agentic ワークフローとページ内分割に対応
 - CU 派生アナライザー自動管理: オプション変更時に `studio.<source>.<hash>` で派生アナライザーを自動作成
 
 ### ビジュアルインスペクション
@@ -137,6 +138,11 @@ DI_KEY=<your-di-key>          # identity モードなら不要
 CU_ENDPOINT=https://<your-cu>.cognitiveservices.azure.com/
 CU_KEY=<your-cu-key>
 # CU_AUTH_MODE=auto
+# CU_ENABLE_PREVIEW=false      # true で 2026-06-01-preview を明示的に有効化
+
+# 解析ジョブ
+# ANALYSIS_WORKERS=4           # プロセスごとの同時解析数
+# ANALYSIS_QUEUE_SIZE=32       # プロセスごとの待機ジョブ数
 
 # ストレージ （デフォルト: local）
 # STORAGE_BACKEND=local        # local / blob
@@ -147,6 +153,16 @@ CU_KEY=<your-cu-key>
 # UPLOADS_ENABLED=true         # false でアップロード無効化
 # UI_DEFAULT_LANG=ja           # ja / en
 ```
+
+### Content Understanding の API プロファイル
+
+- 既定は GA `2025-11-01` です。Python SDK は `azure-ai-contentunderstanding>=1.1.0,<1.2.0` に固定しています。
+- `CU_ENABLE_PREVIEW=true` の場合に限り、画面で Preview `2026-06-01-preview` を選択できます。Preview を GA へ自動フォールバックすることはありません。
+- Preview では Read/Layout の同期解析、Agentic ワークフロー、ページ内分割、Preview 税務アナライザーを利用できます。Preview は一般提供前であり、SLA はありません。
+- 結果には API バージョン、実行方式、実効アナライザーを記録し、署名、文書メタデータ、セグメント、フィールド根拠を表示します。
+- Azure Container Apps 配置では PowerShell の `-CuEnablePreview $true`、または Bash の `--cu-enable-preview true` で同じ機能フラグを設定できます。
+
+公式資料: [Content Understanding の新機能](https://learn.microsoft.com/azure/ai-services/content-understanding/whats-new)、[同期 REST API](https://learn.microsoft.com/azure/ai-services/content-understanding/quickstart/use-synchronous-rest-api)
 
 ## 起動
 

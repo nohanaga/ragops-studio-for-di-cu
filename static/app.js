@@ -8,14 +8,17 @@ let currentOutputContentFormat = '';
 let currentService = 'di'; // 'di' | 'cu'
 let uploadActionMode = 'upload'; // 'upload' | 'analyze'
 let hasPendingLocalFile = false;
+const backgroundJobs = new Map();
 
 let pdfDoc = null;
 let currentPageNumber = 1;
 let overlayMode = 'lines';
+let currentCuEvidence = null;
 
 // Uploads are controlled by server-side env var and injected into the page.
 const UPLOADS_ENABLED = !!(window.__APP_CONFIG__ && window.__APP_CONFIG__.uploadsEnabled);
 const CU_ENABLED = !!(window.__APP_CONFIG__ && window.__APP_CONFIG__.cuEnabled);
+let cuCapabilities = null;
 
 const MAX_LIST = 50;
 const MAX_OVERLAY_SHAPES = 2500;
@@ -51,6 +54,9 @@ const I18N = {
     'status.analyzingQueued': '解析中（キュー）…',
     'status.analyzing': '解析中…',
     'status.analyzingWithStatus': '解析中（{status}）…',
+    'status.backgroundQueued': 'バックグラウンド解析を開始しました（実行中: {count}件）',
+    'status.backgroundCompleted': 'バックグラウンド解析が完了しました: {name}',
+    'status.backgroundDuplicate': '同じ設定の解析がすでに実行中です',
     'status.analyzeFailed': '解析失敗',
     'status.jobLookupFailed': 'ジョブ取得失敗',
     'status.failed': '失敗',
@@ -100,6 +106,10 @@ const I18N = {
     'field.analysisOptions': '解析オプション',
     'field.cuOptions': 'CU 実行 / 文書設定',
     'field.cuRequestOptions': '実行オプション',
+    'field.cuApiProfile': 'API プロファイル',
+    'field.cuExecutionMode': '実行方式',
+    'field.cuWorkflow': 'ワークフロー',
+    'field.cuAllowInPageSegments': 'ページ内分割',
     'field.cuGeneralOptions': '一般',
     'field.cuDocumentOptions': '文書抽出',
     'field.cuFormatOptions': '出力フォーマット',
@@ -158,12 +168,28 @@ const I18N = {
     'tooltip.cuEnableSegment': 'デフォルト: false。contentCategories に基づいて内容を論理的なセグメントへ分割し、カテゴリ分類します。混在文書を部分ごとに振り分けたいときに使います。',
     'tooltip.cuSegmentPerPage': 'デフォルト: false。セグメンテーション時に論理境界ではなく 1 ページ 1 セグメントへ強制します。ページ単位の並列処理や混在 PDF の切り分け向けです。',
     'tooltip.cuContentCategories': 'デフォルト: 未設定。分類に使うカテゴリ定義の JSON です。各カテゴリは description を必須とし、必要なら analyzerId で振り分け先 analyzer を指定できます。enableSegment=true なら分割と分類、false ならファイル全体を 1 カテゴリに分類します。',
+    'tooltip.cuWorkflow': 'Preview の文書アナライザー作成設定です。agentic は推論コストと待ち時間が増え、音声・動画・画像と method=extract のフィールドには使用できません。',
+    'tooltip.cuAllowInPageSegments': 'Preview の分類アナライザー作成設定です。1 ページ内に複数の論理セグメントを作成します。Enable segment=true が必要で、Segment per page とは同時に使えません。',
+    'cu.profile.ga': 'GA (2025-11-01)',
+    'cu.profile.preview': 'Preview (2026-06-01-preview)',
+    'cu.execution.async': '非同期',
+    'cu.execution.sync': '同期',
+    'cu.preview.notice': 'Preview は一般提供前であり、SLA はありません。',
+    'cu.agentic.notice': 'Agentic は通常方式よりコストと待ち時間が増えます。文書と非 extract フィールドに限定されます。',
     'common.defaultOption': '(既定)',
     'field.outputContentFormat': '出力フォーマット',
     'field.outputContentFormat.default': '(既定)',
     'field.queryFields': 'クエリフィールド',
     'field.queryFields.placeholder': 'FieldA,FieldB',
     'field.job': 'ジョブ',
+    'jobs.none': 'バックグラウンドジョブはありません',
+    'jobs.open': '結果を開く',
+    'jobs.dismiss': '一覧から削除',
+    'jobs.queued': '待機中',
+    'jobs.running': '実行中',
+    'jobs.succeeded': '完了',
+    'jobs.failed': '失敗',
+    'jobs.timeout': '監視タイムアウト',
     'field.option.highRes': '高解像度 (ocrHighResolution)',
     'field.option.formulas': '数式 (formulas)',
     'field.option.barcodes': 'バーコード / QR (barcodes)',
@@ -226,6 +252,9 @@ const I18N = {
     'overlay.tables': 'テーブル',
     'overlay.keyValuePairs': 'KVP',
     'overlay.selectionMarks': '選択マーク',
+    'overlay.signatures': '署名',
+    'overlay.segments': 'セグメント',
+    'overlay.evidence': '選択した根拠',
 
     'structure.hint': '解析後にparagraphsとsectionsの構造を表示します',
     'structure.noData': 'このドキュメントにはparagraphsまたはsectionsデータがありません',
@@ -339,6 +368,14 @@ const I18N = {
     'cu.contentSummary': 'CU Content [{index}] - {kind} - {path}',
     'cu.contentMeta': 'MIME={mime} | ページ={pages} | Markdown={chars} 文字 | フィールド={fields}',
     'cu.contentStats': '{message} | ページ={pages} / 段落={paragraphs} / テーブル={tables}',
+    'cu.executionMeta': 'API={apiVersion} | 実行方式={executionMode} | ワークフロー={workflow}',
+    'cu.metadata': '文書メタデータ',
+    'cu.signatures': '署名',
+    'cu.segments': 'セグメント',
+    'cu.noEvidence': '根拠なし',
+    'cu.markdownEvidence': 'Markdown 根拠',
+    'cu.signatureRow': '署名 {id} | ページ={page} | role={role}',
+    'cu.segmentRow': '{id} | カテゴリ={category} | 信頼度={confidence} | ページ={pages}',
 
     'results.tabs.cuFields': 'CU フィールド',
     'results.tabs.cuMarkdown': 'CU Markdown',
@@ -447,6 +484,9 @@ const I18N = {
     'status.analyzingQueued': 'Analyzing (queued)…',
     'status.analyzing': 'Analyzing…',
     'status.analyzingWithStatus': 'Analyzing ({status})…',
+    'status.backgroundQueued': 'Background analysis started ({count} running)',
+    'status.backgroundCompleted': 'Background analysis completed: {name}',
+    'status.backgroundDuplicate': 'The same analysis request is already running',
     'status.analyzeFailed': 'Analyze failed',
     'status.jobLookupFailed': 'Job lookup failed',
     'status.failed': 'Failed',
@@ -503,6 +543,10 @@ const I18N = {
     'field.analysisOptions': 'Analysis options',
     'field.cuOptions': 'CU request / document config',
     'field.cuRequestOptions': 'Request options',
+    'field.cuApiProfile': 'API profile',
+    'field.cuExecutionMode': 'Execution mode',
+    'field.cuWorkflow': 'Workflow',
+    'field.cuAllowInPageSegments': 'Allow in-page segments',
     'field.cuGeneralOptions': 'General',
     'field.cuDocumentOptions': 'Document extraction',
     'field.cuFormatOptions': 'Output format',
@@ -561,12 +605,28 @@ const I18N = {
     'tooltip.cuEnableSegment': 'Default: false. Splits the content into logical segments based on contentCategories and classifies each segment. Use it for mixed documents that need different handling by section.',
     'tooltip.cuSegmentPerPage': 'Default: false. Forces segmentation to create one segment per page instead of using logical boundaries. Useful for page-by-page routing or parallel processing.',
     'tooltip.cuContentCategories': 'Default: not set. JSON definition of the categories used for classification. Each category must provide a description, and can optionally provide an analyzerId for routed downstream analysis. With enableSegment=true it splits and classifies; with false it classifies the whole file as one category.',
+    'tooltip.cuWorkflow': 'Preview document-analyzer creation setting. agentic increases inference cost and latency, and is unavailable for audio, video, image, or fields using method=extract.',
+    'tooltip.cuAllowInPageSegments': 'Preview classification-analyzer creation setting. Allows multiple logical segments within one page. Requires Enable segment=true and cannot be combined with Segment per page.',
+    'cu.profile.ga': 'GA (2025-11-01)',
+    'cu.profile.preview': 'Preview (2026-06-01-preview)',
+    'cu.execution.async': 'Asynchronous',
+    'cu.execution.sync': 'Synchronous',
+    'cu.preview.notice': 'Preview is prerelease and has no SLA.',
+    'cu.agentic.notice': 'Agentic increases cost and latency. It is limited to documents and fields that do not use extract.',
     'common.defaultOption': '(default)',
     'field.outputContentFormat': 'Output content format',
     'field.outputContentFormat.default': '(default)',
     'field.queryFields': 'Query fields',
     'field.queryFields.placeholder': 'FieldA,FieldB',
     'field.job': 'Job',
+    'jobs.none': 'No background jobs',
+    'jobs.open': 'Open result',
+    'jobs.dismiss': 'Remove from list',
+    'jobs.queued': 'Queued',
+    'jobs.running': 'Running',
+    'jobs.succeeded': 'Completed',
+    'jobs.failed': 'Failed',
+    'jobs.timeout': 'Monitoring timed out',
     'field.option.highRes': 'High resolution (ocrHighResolution)',
     'field.option.formulas': 'Formulas (formulas)',
     'field.option.barcodes': 'Barcodes / QR (barcodes)',
@@ -629,6 +689,9 @@ const I18N = {
     'overlay.tables': 'Tables',
     'overlay.keyValuePairs': 'KeyValuePairs',
     'overlay.selectionMarks': 'SelectionMarks',
+    'overlay.signatures': 'Signatures',
+    'overlay.segments': 'Segments',
+    'overlay.evidence': 'Selected evidence',
 
     'structure.hint': 'After analysis, paragraphs/sections structure is shown here',
     'structure.noData': 'This document has no paragraphs/sections data',
@@ -742,6 +805,14 @@ const I18N = {
     'cu.contentSummary': 'CU Content [{index}] - {kind} - {path}',
     'cu.contentMeta': 'MIME={mime} | pages={pages} | markdown={chars} chars | fields={fields}',
     'cu.contentStats': '{message} | pages={pages} / paragraphs={paragraphs} / tables={tables}',
+    'cu.executionMeta': 'API={apiVersion} | Mode={executionMode} | Workflow={workflow}',
+    'cu.metadata': 'Document metadata',
+    'cu.signatures': 'Signatures',
+    'cu.segments': 'Segments',
+    'cu.noEvidence': 'No grounding',
+    'cu.markdownEvidence': 'Markdown grounding',
+    'cu.signatureRow': 'Signature {id} | page={page} | role={role}',
+    'cu.segmentRow': '{id} | category={category} | confidence={confidence} | pages={pages}',
 
     'results.tabs.cuFields': 'CU Fields',
     'results.tabs.cuMarkdown': 'CU Markdown',
@@ -1000,6 +1071,7 @@ function refreshDynamicUiForLanguage() {
     }
   }
 
+  renderBackgroundJobs();
   void loadLibrary();
 }
 
@@ -1689,6 +1761,14 @@ function setBusy(isBusy, message) {
   busy.setAttribute('aria-hidden', String(!isBusy));
 }
 
+function setForegroundAnalysisLock(isLocked) {
+  const pane = document.getElementById('main-pane-input');
+  if (!pane) return;
+  pane.inert = !!isLocked;
+  pane.classList.toggle('pane--analysis-locked', !!isLocked);
+  pane.setAttribute('aria-busy', String(!!isLocked));
+}
+
 let tooltipPinned = false;
 
 function isResponsiveTabMode() {
@@ -1824,6 +1904,8 @@ function collectAnalyzeOptions() {
       annotation_format: getSelectOptionValue('optCuAnnotationFormat'),
       enable_segment: getTriStateBoolean('optCuEnableSegment'),
       segment_per_page: getTriStateBoolean('optCuSegmentPerPage'),
+      allow_in_page_segments: getTriStateBoolean('optCuAllowInPageSegments'),
+      workflow: getSelectOptionValue('optCuWorkflow'),
       content_categories: contentCategories || undefined,
     };
 
@@ -1867,6 +1949,29 @@ function collectAnalyzeOptions() {
   };
 
   return options;
+}
+
+function buildCuAnalyzeRequest(documentId, analyzerId, options) {
+  const analysisOptions = {
+    content_range: options.content_range,
+    processing_location: options.processing_location,
+  };
+  const config = { ...options };
+  delete config.content_range;
+  delete config.processing_location;
+  delete config.field_schema;
+
+  const analyzerOverrides = { config };
+  if (options.field_schema) analyzerOverrides.fieldSchema = options.field_schema;
+
+  return {
+    documentId,
+    analyzerId,
+    apiProfile: getCuApiProfile(),
+    executionMode: getCuExecutionMode(),
+    analysisOptions,
+    analyzerOverrides,
+  };
 }
 
 function stateKey(fileHash, modelId) {
@@ -2206,14 +2311,14 @@ function drawOverlayForPage(pageNumber) {
   const pageW = page.width;
   const pageH = page.height;
 
-  function addPath(polygon, cssClass, tooltipText, linkTargetId, jsonPath) {
+  function addPath(polygon, cssClass, tooltipText, linkTargetId, jsonPath, visibleLabel = '') {
     const pathD = polygonToPath(polygon, pageW, pageH, canvasW, canvasH);
     if (!pathD) return;
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     path.setAttribute('d', pathD);
     path.setAttribute('class', cssClass);
     attachTooltipHandlers(path, tooltipText);
-    if (linkTargetId) {
+    if (linkTargetId || jsonPath) {
       path.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -2234,6 +2339,66 @@ function drawOverlayForPage(pageNumber) {
       });
     }
     overlay.appendChild(path);
+    if (visibleLabel && Array.isArray(polygon) && polygon.length >= 2) {
+      const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      label.setAttribute('x', String((polygon[0] / pageW) * canvasW));
+      label.setAttribute('y', String(Math.max(12, (polygon[1] / pageH) * canvasH - 4)));
+      label.setAttribute('class', 'bbox-label');
+      label.textContent = visibleLabel;
+      overlay.appendChild(label);
+    }
+  }
+
+  if (overlayMode === 'evidence') {
+    const evidence = currentCuEvidence;
+    if (!evidence) return;
+    for (const region of evidence.regions || []) {
+      if (region.pageNumber !== pageNumber) continue;
+      addPath(region.polygon, 'bbox bbox--evidence', evidence.label, null, evidence.jsonPath);
+    }
+    return;
+  }
+
+  if (overlayMode === 'signatures') {
+    const signatures = Array.isArray(currentResult.signatures) ? currentResult.signatures : [];
+    let count = 0;
+    for (const signature of signatures) {
+      for (const region of signature.boundingRegions || []) {
+        if (count >= MAX_OVERLAY_SHAPES) return;
+        if (region.pageNumber !== pageNumber) continue;
+        addPath(
+          region.polygon,
+          'bbox bbox--signatures',
+          `${tr('cu.signatures')}: ${signature.id}`,
+          null,
+          signature._jsonPath,
+          String(signature.id),
+        );
+        count++;
+      }
+    }
+    return;
+  }
+
+  if (overlayMode === 'segments') {
+    const segments = Array.isArray(currentResult.segments) ? currentResult.segments : [];
+    let count = 0;
+    for (const segment of segments) {
+      for (const region of segment.boundingRegions || []) {
+        if (count >= MAX_OVERLAY_SHAPES) return;
+        if (region.pageNumber !== pageNumber) continue;
+        addPath(
+          region.polygon,
+          'bbox bbox--segments',
+          `${segment.segmentId}: ${segment.category || '-'}`,
+          null,
+          segment._jsonPath,
+          `${segment.segmentId}: ${segment.category || '-'}`,
+        );
+        count++;
+      }
+    }
+    return;
   }
 
   if (overlayMode === 'lines' || overlayMode === 'words') {
@@ -2626,12 +2791,13 @@ async function checkCacheExists() {
   }
   try {
     const options = collectAnalyzeOptions();
-    // CU cache uses "cu:" prefix on server side
-    const cacheModelId = currentService === 'cu' ? `cu:v4:${modelId}` : modelId;
+    const requestPayload = currentService === 'cu'
+      ? { service: 'cu', fileHash: currentDocument.fileHash, ...buildCuAnalyzeRequest(currentDocument.id, modelId, options) }
+      : { fileHash: currentDocument.fileHash, modelId, options };
     const res = await fetch('/api/cache/exists', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fileHash: currentDocument.fileHash, modelId: cacheModelId, options }),
+      body: JSON.stringify(requestPayload),
     });
     const data = await res.json();
     if (res.ok && data.exists) {
@@ -2678,8 +2844,15 @@ function summarizeCuResult(result, normalizedResult = null) {
   const lines = [];
   lines.push(`${tr('cu.summary.analyzerId')}: ${raw.analyzerId ?? raw.analyzer_id ?? '-'}`);
   lines.push(`${tr('cu.summary.status')}: ${raw.status ?? result?.status ?? '-'}`);
+  lines.push(`apiVersion: ${normalized.apiVersion ?? '-'}`);
+  lines.push(`executionMode: ${normalized.executionMode ?? '-'}`);
+  lines.push(`resolvedWorkflow: ${normalized.resolvedWorkflow ?? '-'}`);
+  lines.push(`analyzerConfigHash: ${normalized.analyzerConfigHash ?? '-'}`);
+  lines.push(`analyzedAt: ${normalized.analyzedAt ?? '-'}`);
   const contents = raw.contents || [];
   lines.push(`${tr('cu.summary.contents')}: ${contents.length}`);
+  lines.push(`${tr('cu.signatures')}: ${normalized.signatures?.length ?? 0}`);
+  lines.push(`${tr('cu.segments')}: ${normalized.segments?.length ?? 0}`);
   lines.push(`${tr('summary.pages')}: ${Array.isArray(normalized.pages) ? normalized.pages.length : 0}`);
   lines.push(`${tr('structure.paragraphs')}: ${Array.isArray(normalized.paragraphs) ? normalized.paragraphs.length : 0}`);
   lines.push(`${tr('items.section.tables')}: ${Array.isArray(normalized.tables) ? normalized.tables.length : 0}`);
@@ -2719,6 +2892,20 @@ function parseCuSourceRegions(source) {
 }
 
 function normalizeCuRegions(source) {
+  if (Array.isArray(source)) {
+    return source.flatMap(item => normalizeCuRegions(item));
+  }
+  if (source && typeof source === 'object') {
+    if (Array.isArray(source.boundingRegions)) {
+      return normalizeCuRegions(source.boundingRegions);
+    }
+    const pageNumber = source.pageNumber ?? source.page_number;
+    const polygon = source.polygon;
+    if (Number.isFinite(Number(pageNumber)) && Array.isArray(polygon)) {
+      return [{ pageNumber: Number(pageNumber), polygon: polygon.slice() }];
+    }
+    return [];
+  }
   return parseCuSourceRegions(source).map(region => ({
     pageNumber: region.pageNumber,
     polygon: region.polygon,
@@ -2732,11 +2919,52 @@ function firstCuPolygon(source) {
 
 function normalizeCuResultForUi(result) {
   const raw = result?.result || result || {};
+  const jsonPathPrefix = result?.result ? ['result'] : [];
   const contents = Array.isArray(raw.contents) ? raw.contents : [];
   const documentContent = contents.find(c => c?.kind === 'document') || contents[0] || null;
+  const studio = raw._studio || result?._studio || {};
+  const normalizedContents = contents.map((content, contentIndex) => ({
+    kind: content?.kind,
+    path: content?.path,
+    markdown: content?.markdown || '',
+    fields: Object.fromEntries(Object.entries(content?.fields || {}).map(([name, field]) => [name, {
+      ...(field && typeof field === 'object' ? field : { value: field }),
+      source: field?.source,
+      spans: field?.spans || (field?.span ? [field.span] : []),
+      boundingRegions: normalizeCuRegions(field?.source),
+    }])),
+    metadata: content?.metadata && typeof content.metadata === 'object' ? content.metadata : {},
+    signatures: (content?.signatures || []).map((signature, signatureIndex) => ({
+      ...signature,
+      id: signature.id || `signature-${signatureIndex + 1}`,
+      boundingRegions: normalizeCuRegions(signature.source),
+      _jsonPath: [...jsonPathPrefix, 'contents', contentIndex, 'signatures', signatureIndex],
+    })),
+    segments: (content?.segments || []).map((segment, segmentIndex) => ({
+      ...segment,
+      segmentId: segment.segmentId ?? segment.segment_id ?? `segment-${segmentIndex + 1}`,
+      startPageNumber: segment.startPageNumber ?? segment.start_page_number,
+      endPageNumber: segment.endPageNumber ?? segment.end_page_number,
+      boundingRegions: normalizeCuRegions(segment.source),
+      _jsonPath: [...jsonPathPrefix, 'contents', contentIndex, 'segments', segmentIndex],
+    })),
+  }));
+  const common = {
+    apiProfile: studio.apiProfile || 'ga',
+    apiVersion: studio.apiVersion || raw.apiVersion || '-',
+    executionMode: studio.executionMode || 'async',
+    resolvedWorkflow: studio.resolvedWorkflow || '-',
+    analyzerConfigHash: studio.analyzerConfigHash || '-',
+    analyzedAt: studio.analyzedAt || '-',
+    contents: normalizedContents,
+    metadata: documentContent?.metadata || raw.metadata || {},
+    signatures: normalizedContents.flatMap(content => content.signatures),
+    segments: normalizedContents.flatMap(content => content.segments),
+  };
 
   if (!documentContent || documentContent.kind !== 'document') {
     return {
+      ...common,
       modelId: raw.analyzerId || '-',
       contentFormat: 'markdown',
       content: contents.map(c => c?.markdown || '').filter(Boolean).join('\n\n---\n\n'),
@@ -2829,7 +3057,8 @@ function normalizeCuResultForUi(result) {
   }));
 
   return {
-    modelId: raw.analyzerId || '-',
+    ...common,
+    modelId: studio.effectiveAnalyzerId || raw.analyzerId || '-',
     contentFormat: 'markdown',
     content: documentContent.markdown || '',
     pages,
@@ -2841,12 +3070,66 @@ function normalizeCuResultForUi(result) {
   };
 }
 
+async function focusCuEvidence(sourceOrRegions, label, jsonPath) {
+  const regions = normalizeCuRegions(sourceOrRegions);
+  if (regions.length === 0) {
+    if (jsonPath) openJsonViewerPath(jsonPath);
+    return;
+  }
+
+  currentCuEvidence = { regions, label, jsonPath };
+  overlayMode = 'evidence';
+  const overlaySelect = document.getElementById('overlaySelect');
+  if (overlaySelect) overlaySelect.value = overlayMode;
+  activatePreviewTab('document');
+
+  const pageNumber = regions[0].pageNumber;
+  if (pdfDoc) {
+    currentPageNumber = pageNumber;
+    document.getElementById('pageSelect').value = String(pageNumber);
+    await renderPdfPage(pageNumber);
+  } else {
+    currentPageNumber = 1;
+    drawOverlayForPage(1);
+  }
+}
+
+function focusCuMarkdownSpans(spans, markdown = currentResult?.content || '') {
+  const ranges = (Array.isArray(spans) ? spans : [])
+    .map(span => ({
+      offset: Number(span?.offset),
+      length: Number(span?.length),
+    }))
+    .filter(range => Number.isFinite(range.offset) && Number.isFinite(range.length) && range.length > 0)
+    .sort((left, right) => left.offset - right.offset);
+  if (!markdown || ranges.length === 0) return;
+
+  const viewer = document.getElementById('rawViewer');
+  if (!viewer) return;
+  viewer.replaceChildren();
+  let cursor = 0;
+  for (const range of ranges) {
+    const start = Math.max(cursor, Math.min(markdown.length, range.offset));
+    const end = Math.max(start, Math.min(markdown.length, range.offset + range.length));
+    if (start > cursor) viewer.appendChild(document.createTextNode(markdown.slice(cursor, start)));
+    const mark = document.createElement('mark');
+    mark.className = 'cu-span-highlight';
+    mark.textContent = markdown.slice(start, end);
+    viewer.appendChild(mark);
+    cursor = end;
+  }
+  if (cursor < markdown.length) viewer.appendChild(document.createTextNode(markdown.slice(cursor)));
+  activatePreviewTab('raw');
+  viewer.querySelector('mark')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+}
+
 function renderCuItems(result) {
   const root = document.getElementById('itemsRoot');
   if (!root) return;
 
   const data = result.result || result || {};
   const contents = Array.isArray(data.contents) ? data.contents : [];
+  const jsonPathPrefix = result?.result ? ['result'] : [];
   const normalized = normalizeCuResultForUi(result);
 
   renderItems(normalized);
@@ -2854,9 +3137,18 @@ function renderCuItems(result) {
   if (contents.length === 0) return;
 
   const fragment = document.createDocumentFragment();
+  const executionMeta = document.createElement('div');
+  executionMeta.className = 'cu-execution-meta';
+  executionMeta.textContent = tr('cu.executionMeta', {
+    apiVersion: normalized.apiVersion,
+    executionMode: normalized.executionMode,
+    workflow: normalized.resolvedWorkflow,
+  });
+  fragment.appendChild(executionMeta);
 
   for (let i = 0; i < contents.length; i++) {
     const content = contents[i];
+    const normalizedContent = normalized.contents[i] || {};
     const section = document.createElement('details');
     section.open = i === 0;
 
@@ -2899,6 +3191,7 @@ function renderCuItems(result) {
 
       for (const key of fieldKeys) {
         const field = fields[key];
+        const normalizedField = normalizedContent.fields?.[key] || {};
         const row = document.createElement('div');
         row.className = 'cu-field';
         row.tabIndex = 0;
@@ -2915,6 +3208,25 @@ function renderCuItems(result) {
         valueEl.textContent = _cuFieldValue(field);
         row.appendChild(valueEl);
 
+        const evidenceEl = document.createElement('span');
+        evidenceEl.className = 'cu-field__evidence';
+        evidenceEl.textContent = normalizedField.boundingRegions?.length
+          ? `p.${normalizedField.boundingRegions[0].pageNumber}`
+          : tr('cu.noEvidence');
+        row.appendChild(evidenceEl);
+
+        if (normalizedField.spans?.length) {
+          const spanButton = document.createElement('button');
+          spanButton.type = 'button';
+          spanButton.className = 'cu-field__spanButton';
+          spanButton.textContent = tr('cu.markdownEvidence');
+          spanButton.addEventListener('click', (event) => {
+            event.stopPropagation();
+            focusCuMarkdownSpans(normalizedField.spans, normalizedContent.markdown);
+          });
+          row.appendChild(spanButton);
+        }
+
         if (field.confidence != null) {
           const confEl = document.createElement('span');
           const conf = field.confidence;
@@ -2925,12 +3237,14 @@ function renderCuItems(result) {
           row.appendChild(confEl);
         }
 
-        const jsonPath = ['contents', i, 'fields', key];
-        row.addEventListener('click', () => openJsonViewerPath(jsonPath));
+        const jsonPath = [...jsonPathPrefix, 'contents', i, 'fields', key];
+        row.addEventListener('click', () => {
+          focusCuEvidence(normalizedField.boundingRegions, key, jsonPath);
+        });
         row.addEventListener('keydown', (event) => {
           if (event.key === 'Enter' || event.key === ' ') {
             event.preventDefault();
-            openJsonViewerPath(jsonPath);
+            focusCuEvidence(normalizedField.boundingRegions, key, jsonPath);
           }
         });
 
@@ -2946,6 +3260,71 @@ function renderCuItems(result) {
         tables: normalized.tables.length,
       });
       section.appendChild(empty);
+    }
+
+    const metadata = normalizedContent.metadata || {};
+    if (Object.keys(metadata).length > 0) {
+      const metadataDetails = document.createElement('details');
+      const metadataSummary = document.createElement('summary');
+      metadataSummary.textContent = tr('cu.metadata');
+      const metadataBody = document.createElement('pre');
+      metadataBody.className = 'cu-metadata';
+      metadataBody.textContent = JSON.stringify(metadata, null, 2);
+      metadataDetails.append(metadataSummary, metadataBody);
+      section.appendChild(metadataDetails);
+    }
+
+    const signatures = normalizedContent.signatures || [];
+    if (signatures.length > 0) {
+      const signaturesDetails = document.createElement('details');
+      const signaturesSummary = document.createElement('summary');
+      signaturesSummary.textContent = `${tr('cu.signatures')} (${signatures.length})`;
+      signaturesDetails.appendChild(signaturesSummary);
+      signatures.forEach((signature) => {
+        const region = signature.boundingRegions?.[0];
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'cu-evidence-row';
+        const elements = Array.isArray(signature.elements) ? signature.elements.join(', ') : '-';
+        row.textContent = `${tr('cu.signatureRow', {
+          id: signature.id,
+          page: region?.pageNumber ?? '-',
+          role: signature.role || '-',
+        })} | span=${JSON.stringify(signature.span ?? '-')} | elements=${elements}`;
+        row.addEventListener('click', () => focusCuEvidence(
+          signature.boundingRegions,
+          `${tr('cu.signatures')}: ${signature.id}`,
+          signature._jsonPath,
+        ));
+        signaturesDetails.appendChild(row);
+      });
+      section.appendChild(signaturesDetails);
+    }
+
+    const segments = normalizedContent.segments || [];
+    if (segments.length > 0) {
+      const segmentsDetails = document.createElement('details');
+      const segmentsSummary = document.createElement('summary');
+      segmentsSummary.textContent = `${tr('cu.segments')} (${segments.length})`;
+      segmentsDetails.appendChild(segmentsSummary);
+      segments.forEach((segment) => {
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'cu-evidence-row';
+        row.textContent = tr('cu.segmentRow', {
+          id: segment.segmentId,
+          category: segment.category || '-',
+          confidence: segment.confidence ?? '-',
+          pages: `${segment.startPageNumber ?? '-'}-${segment.endPageNumber ?? '-'}`,
+        });
+        row.addEventListener('click', () => focusCuEvidence(
+          segment.boundingRegions,
+          `${segment.segmentId}: ${segment.category || '-'}`,
+          segment._jsonPath,
+        ));
+        segmentsDetails.appendChild(row);
+      });
+      section.appendChild(segmentsDetails);
     }
 
     fragment.appendChild(section);
@@ -3067,6 +3446,8 @@ async function switchService(service) {
   if (diCustomModel) diCustomModel.style.display = service === 'cu' ? 'none' : '';
   if (diHintCustomModel) diHintCustomModel.style.display = service === 'cu' ? 'none' : '';
 
+  updateCuControlState();
+
   // Reload models for the selected service
   await loadModels();
 
@@ -3075,6 +3456,100 @@ async function switchService(service) {
 
   // Reset cache info 
   setCacheInfo('');
+}
+
+async function loadCuCapabilities() {
+  const gaOnly = {
+    defaultProfile: 'ga',
+    profiles: {
+      ga: { apiVersion: '2025-11-01', enabled: true, executionModes: ['async'] },
+      preview: { apiVersion: '2026-06-01-preview', enabled: false, executionModes: ['async', 'sync'] },
+    },
+  };
+
+  if (!CU_ENABLED) {
+    cuCapabilities = gaOnly;
+    updateCuControlState();
+    return;
+  }
+
+  try {
+    const response = await fetch('/api/cu/capabilities');
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    cuCapabilities = await response.json();
+  } catch (error) {
+    console.warn('Failed to load CU capabilities; using GA-only controls.', error);
+    cuCapabilities = gaOnly;
+  }
+  updateCuControlState();
+}
+
+function getCuApiProfile() {
+  return document.getElementById('cuApiProfile')?.value || 'ga';
+}
+
+function getCuExecutionMode() {
+  return document.getElementById('cuExecutionMode')?.value || 'async';
+}
+
+function updateCuControlState() {
+  const profileSelect = document.getElementById('cuApiProfile');
+  const executionSelect = document.getElementById('cuExecutionMode');
+  if (!profileSelect || !executionSelect) return;
+
+  const previewEnabled = cuCapabilities?.profiles?.preview?.enabled === true;
+  const previewOption = profileSelect.querySelector('option[value="preview"]');
+  if (previewOption) previewOption.disabled = !previewEnabled;
+  if (!previewEnabled && profileSelect.value === 'preview') profileSelect.value = 'ga';
+
+  const profile = profileSelect.value || 'ga';
+  const selectedModel = _pickerModels.find(model => model.id === getModelId());
+  const executionModes = cuCapabilities?.profiles?.[profile]?.executionModes || ['async'];
+  const syncAllowed = executionModes.includes('sync') && selectedModel?.sync === true;
+  const syncOption = executionSelect.querySelector('option[value="sync"]');
+  if (syncOption) syncOption.disabled = !syncAllowed;
+  if (!syncAllowed && executionSelect.value === 'sync') executionSelect.value = 'async';
+
+  const previewSelected = profile === 'preview';
+  const previewNotice = document.getElementById('cuPreviewNotice');
+  const workflowSelect = document.getElementById('optCuWorkflow');
+  const inPageSegmentsSelect = document.getElementById('optCuAllowInPageSegments');
+  if (!previewSelected) {
+    if (workflowSelect) workflowSelect.value = '';
+    if (inPageSegmentsSelect) inPageSegmentsSelect.value = '';
+  }
+  if (previewNotice) {
+    previewNotice.hidden = !previewSelected;
+    previewNotice.textContent = workflowSelect?.value === 'agentic'
+      ? `${tr('cu.preview.notice')} ${tr('cu.agentic.notice')}`
+      : tr('cu.preview.notice');
+  }
+
+  const workflowRow = document.getElementById('cuWorkflowRow');
+  const modelId = selectedModel?.id || '';
+  const isDocumentModel = !modelId.startsWith('prebuilt-image')
+    && !modelId.startsWith('prebuilt-audio')
+    && !modelId.startsWith('prebuilt-video');
+  if (workflowRow) workflowRow.hidden = !(previewSelected && isDocumentModel);
+
+  const inPageSegmentsRow = document.getElementById('cuAllowInPageSegmentsRow');
+  if (inPageSegmentsRow) inPageSegmentsRow.hidden = !previewSelected;
+}
+
+function initCuControls() {
+  const profileSelect = document.getElementById('cuApiProfile');
+  profileSelect?.addEventListener('change', async () => {
+    updateCuControlState();
+    await loadModels();
+    await checkCacheExists();
+  });
+
+  document.getElementById('cuExecutionMode')?.addEventListener('change', checkCacheExists);
+  document.getElementById('optCuWorkflow')?.addEventListener('change', () => {
+    updateCuControlState();
+    checkCacheExists();
+  });
+  document.getElementById('optCuAllowInPageSegments')?.addEventListener('change', checkCacheExists);
 }
 
 function isMediaFile(contentType, filename) {
@@ -3418,6 +3893,7 @@ function renderItems(result) {
 function clearUiForNewUpload() {
   // Clear stale analysis results and overlay from previous file
   currentJobId = null;
+  currentCuEvidence = null;
   currentResult = null;
   currentJsonResult = null;
   currentRequestPayload = null;
@@ -3778,9 +4254,15 @@ function _initPickerEvents() {
 }
 
 async function loadModels() {
-  const endpoint = currentService === 'cu' ? '/api/cu/models' : '/api/models';
+  const endpoint = currentService === 'cu'
+    ? `/api/cu/models?apiProfile=${encodeURIComponent(getCuApiProfile())}`
+    : '/api/models';
   const res = await fetch(endpoint);
   const data = await res.json();
+
+  if (!res.ok) {
+    throw new Error(data.error || `Failed to load models (${res.status})`);
+  }
 
   _pickerModels = data.models || [];
 
@@ -3806,6 +4288,7 @@ async function loadModels() {
   if (btn) btn.textContent = first ? getModelDisplayLabel(first.id) : '…';
 
   _renderPickerList();
+  updateCuControlState();
 }
 
 async function upload() {
@@ -4145,6 +4628,9 @@ function _restoreOptionsFromMeta(opts) {
     annotation_format:      { id: 'optCuAnnotationFormat',   type: 'select' },
     enable_segment:         { id: 'optCuEnableSegment',      type: 'tri' },
     segment_per_page:       { id: 'optCuSegmentPerPage',     type: 'tri' },
+    allow_in_page_segments: { id: 'optCuAllowInPageSegments', type: 'tri' },
+    workflow:               { id: 'optCuWorkflow',           type: 'select' },
+    content_categories:     { id: 'optCuContentCategories',  type: 'json' },
     field_schema:           { id: 'optCuFieldSchema',        type: 'json' },
   };
 
@@ -4163,6 +4649,211 @@ function _restoreOptionsFromMeta(opts) {
       el.value = typeof val === 'object' ? JSON.stringify(val, null, 2) : (val ?? '');
     }
   }
+}
+
+function _stableRequestValue(value) {
+  if (Array.isArray(value)) return value.map(item => _stableRequestValue(item));
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.keys(value)
+        .filter(key => value[key] !== undefined)
+        .sort()
+        .map(key => [key, _stableRequestValue(value[key])])
+    );
+  }
+  return value;
+}
+
+function backgroundRequestKey(payload) {
+  return JSON.stringify(_stableRequestValue(payload));
+}
+
+function activeBackgroundJobCount() {
+  return [...backgroundJobs.values()].filter(job => ['queued', 'running'].includes(job.status)).length;
+}
+
+function renderRequestPayload(payload) {
+  currentRequestPayload = JSON.parse(JSON.stringify(payload));
+  const viewer = document.getElementById('requestJsonViewer');
+  if (!viewer) return;
+  renderInteractiveJson(currentRequestPayload, viewer);
+  document.getElementById('expandAllRequestJsonBtn').disabled = false;
+  document.getElementById('collapseAllRequestJsonBtn').disabled = false;
+  document.getElementById('downloadRequestJsonBtn').disabled = false;
+}
+
+function renderBackgroundJobs() {
+  const root = document.getElementById('backgroundJobs');
+  if (!root) return;
+  const jobs = [...backgroundJobs.values()].sort((left, right) => right.startedAt - left.startedAt);
+  root.replaceChildren();
+
+  if (jobs.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'hint';
+    empty.textContent = tr('jobs.none');
+    root.appendChild(empty);
+    return;
+  }
+
+  for (const job of jobs) {
+    const row = document.createElement('div');
+    row.className = `background-job background-job--${job.status}`;
+
+    const body = document.createElement('div');
+    body.className = 'background-job__body';
+    const title = document.createElement('div');
+    title.className = 'background-job__title';
+    title.textContent = `${job.document.filename || job.document.id} / ${job.modelId}`;
+    const meta = document.createElement('div');
+    meta.className = 'background-job__meta';
+    const started = new Date(job.startedAt).toLocaleTimeString(currentLang === 'ja' ? 'ja-JP' : 'en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+    meta.textContent = `${tr(`jobs.${job.status}`)} · ${started} · ${job.id.slice(0, 8)}`;
+    body.append(title, meta);
+    if (job.error) {
+      const error = document.createElement('div');
+      error.className = 'background-job__error';
+      error.textContent = job.error;
+      body.appendChild(error);
+    }
+    row.appendChild(body);
+
+    const actions = document.createElement('div');
+    actions.className = 'background-job__actions';
+    if (job.status === 'succeeded' && job.result) {
+      const openButton = document.createElement('button');
+      openButton.type = 'button';
+      openButton.className = 'btn btn--small';
+      openButton.textContent = tr('jobs.open');
+      openButton.addEventListener('click', () => openBackgroundJob(job.id));
+      actions.appendChild(openButton);
+    }
+    if (!['queued', 'running'].includes(job.status)) {
+      const dismissButton = document.createElement('button');
+      dismissButton.type = 'button';
+      dismissButton.className = 'background-job__dismiss';
+      dismissButton.textContent = '×';
+      dismissButton.title = tr('jobs.dismiss');
+      dismissButton.setAttribute('aria-label', tr('jobs.dismiss'));
+      dismissButton.addEventListener('click', () => {
+        backgroundJobs.delete(job.id);
+        renderBackgroundJobs();
+      });
+      actions.appendChild(dismissButton);
+    }
+    row.appendChild(actions);
+    root.appendChild(row);
+  }
+}
+
+function isBackgroundJobContextCurrent(job) {
+  if (!currentDocument || currentDocument.id !== job.document.id) return false;
+  if (currentService !== job.service || getModelId() !== job.modelId) return false;
+  try {
+    const options = collectAnalyzeOptions();
+    const payload = job.service === 'cu'
+      ? buildCuAnalyzeRequest(currentDocument.id, job.modelId, options)
+      : { documentId: currentDocument.id, modelId: job.modelId, options };
+    return backgroundRequestKey(payload) === job.requestKey;
+  } catch {
+    return false;
+  }
+}
+
+async function openBackgroundJob(jobId) {
+  const job = backgroundJobs.get(jobId);
+  if (!job?.result) return;
+
+  clearUiForNewUpload();
+  const profileSelect = document.getElementById('cuApiProfile');
+  const targetProfile = job.requestPayload.apiProfile || 'ga';
+  const profileChanged = job.service === 'cu' && profileSelect?.value !== targetProfile;
+  if (profileSelect && job.service === 'cu') profileSelect.value = targetProfile;
+
+  if (currentService !== job.service) {
+    await switchService(job.service);
+  } else if (profileChanged) {
+    updateCuControlState();
+    await loadModels();
+  }
+
+  currentDocument = { ...job.document };
+  hasPendingLocalFile = false;
+  document.getElementById('fileInfo').textContent = formatDocumentInfo(currentDocument);
+  const model = _pickerModels.find(item => item.id === job.modelId);
+  if (model) _selectPickerModel(model.id);
+
+  if (job.service === 'cu') {
+    const executionSelect = document.getElementById('cuExecutionMode');
+    if (executionSelect) executionSelect.value = job.requestPayload.executionMode || 'async';
+  }
+  const savedOptions = job.result?._meta?.options;
+  if (savedOptions && typeof savedOptions === 'object') _restoreOptionsFromMeta(savedOptions);
+
+  currentJobId = job.id;
+  document.getElementById('jobInfo').textContent = job.id;
+  renderRequestPayload(job.requestPayload);
+  await renderPreview(currentDocument);
+  await displayResult(job.result);
+  document.getElementById('analyzeBtn').disabled = false;
+  syncUploadButtonMode();
+}
+
+async function pollBackgroundJob(jobId) {
+  const job = backgroundJobs.get(jobId);
+  if (!job) return;
+  const deadline = Date.now() + 31 * 60 * 1000;
+  let consecutiveErrors = 0;
+
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(`/api/jobs/${jobId}`);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || tr('error.jobLookupFailedGeneric'));
+      consecutiveErrors = 0;
+      job.status = data.job.status;
+      job.error = data.job.error || '';
+      renderBackgroundJobs();
+
+      if (job.status === 'failed') return;
+      if (job.status === 'succeeded') {
+        const resultResponse = await fetch(`/api/jobs/${jobId}/result`);
+        const resultData = await resultResponse.json();
+        if (!resultResponse.ok) throw new Error(resultData.error || tr('error.resultFetchFailedGeneric'));
+        job.result = resultData.result;
+        renderBackgroundJobs();
+
+        if (isBackgroundJobContextCurrent(job)) {
+          currentJobId = job.id;
+          document.getElementById('jobInfo').textContent = job.id;
+          renderRequestPayload(job.requestPayload);
+          await displayResult(job.result);
+        } else {
+          setStatus(tr('status.backgroundCompleted', { name: job.document.filename || job.document.id }));
+        }
+        await loadLibrary();
+        return;
+      }
+    } catch (error) {
+      job.lastPollError = error?.message || String(error);
+      consecutiveErrors++;
+      if (consecutiveErrors >= 5) {
+        job.status = 'failed';
+        job.error = job.lastPollError;
+        renderBackgroundJobs();
+        return;
+      }
+    }
+    await new Promise(resolve => setTimeout(resolve, 1500));
+  }
+
+  job.status = 'timeout';
+  job.error = job.lastPollError || tr('alert.timeout');
+  renderBackgroundJobs();
 }
 
 async function analyze() {
@@ -4197,6 +4888,25 @@ async function analyze() {
     return;
   }
 
+  const service = currentService;
+  const documentSnapshot = { ...currentDocument };
+  const requestPayload = service === 'cu'
+    ? buildCuAnalyzeRequest(documentSnapshot.id, modelId, options)
+    : { documentId: documentSnapshot.id, modelId, options };
+  const requestKey = backgroundRequestKey(requestPayload);
+  const isBackground = service === 'cu' && requestPayload.executionMode === 'async';
+
+  if (isBackground) {
+    const duplicate = [...backgroundJobs.values()].find(job =>
+      ['queued', 'running'].includes(job.status) && job.requestKey === requestKey
+    );
+    if (duplicate) {
+      document.getElementById('jobInfo').textContent = duplicate.id;
+      setStatus(tr('status.backgroundDuplicate'));
+      return;
+    }
+  }
+
   // Restore previous UI state for the same file/model (page, BBox type)
   const st = loadUiState(currentDocument.fileHash, modelId);
   if (st && typeof st.overlayMode === 'string') {
@@ -4209,23 +4919,24 @@ async function analyze() {
   }
 
   setStatus(tr('status.analyzingQueued'));
-  setBusy(true, tr('busy.title'));
-  document.getElementById('summaryText').textContent = '-';
-  const jsonViewer = document.getElementById('jsonViewer');
-  if (jsonViewer) {
-    jsonViewer.innerHTML = `<div class="hint">${tr('json.loading')}</div>`;
+  setBusy(!isBackground, tr('busy.title'));
+  setForegroundAnalysisLock(!isBackground);
+  if (!isBackground) {
+    document.getElementById('summaryText').textContent = '-';
+    const jsonViewer = document.getElementById('jsonViewer');
+    if (jsonViewer) {
+      jsonViewer.innerHTML = `<div class="hint">${tr('json.loading')}</div>`;
+    }
+    document.getElementById('itemsRoot').innerHTML = `<div class="hint">${tr('json.loading')}</div>`;
   }
-  document.getElementById('itemsRoot').innerHTML = `<div class="hint">${tr('json.loading')}</div>`;
   document.getElementById('analyzeBtn').disabled = true;
 
   currentOutputContentFormat = options.output_content_format || '';
 
   try {
     let res, data;
-    let requestPayload;
-    if (currentService === 'cu') {
+    if (service === 'cu') {
       // Content Understanding: use analyzerId
-      requestPayload = { documentId: currentDocument.id, analyzerId: modelId, options };
       res = await fetch('/api/cu/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -4233,7 +4944,6 @@ async function analyze() {
       });
     } else {
       // Document Intelligence: use modelId + options
-      requestPayload = { documentId: currentDocument.id, modelId, options };
       res = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -4241,16 +4951,7 @@ async function analyze() {
       });
     }
     data = await res.json();
-    // Strip undefined properties via JSON.parse/stringify to match the actually sent JSON
-    currentRequestPayload = JSON.parse(JSON.stringify(requestPayload));
-    // Render request JSON immediately
-    const reqViewer = document.getElementById('requestJsonViewer');
-    if (reqViewer) {
-      renderInteractiveJson(currentRequestPayload, reqViewer);
-      document.getElementById('expandAllRequestJsonBtn').disabled = false;
-      document.getElementById('collapseAllRequestJsonBtn').disabled = false;
-      document.getElementById('downloadRequestJsonBtn').disabled = false;
-    }
+    renderRequestPayload(requestPayload);
     if (!res.ok) {
       setStatus(tr('status.analyzeFailed'));
       setBusy(false);
@@ -4261,6 +4962,27 @@ async function analyze() {
 
     currentJobId = data.job.id;
     document.getElementById('jobInfo').textContent = currentJobId;
+    if (isBackground) {
+      const job = {
+        id: currentJobId,
+        status: data.job.cacheHit ? 'succeeded' : 'queued',
+        document: documentSnapshot,
+        service,
+        modelId,
+        requestPayload: JSON.parse(JSON.stringify(requestPayload)),
+        requestKey,
+        startedAt: Date.now(),
+        result: null,
+        error: '',
+      };
+      backgroundJobs.set(job.id, job);
+      renderBackgroundJobs();
+      setBusy(false);
+      document.getElementById('analyzeBtn').disabled = false;
+      setStatus(tr('status.backgroundQueued', { count: activeBackgroundJobCount() }));
+      void pollBackgroundJob(job.id);
+      return;
+    }
     await pollJob(currentJobId);
   } catch (err) {
     console.error('Analyze failed:', err);
@@ -4268,12 +4990,15 @@ async function analyze() {
     document.getElementById('analyzeBtn').disabled = false;
     setStatus(tr('status.analyzeFailed'));
     alert(tr('error.analyzeFailedGeneric'));
+  } finally {
+    if (!isBackground) setForegroundAnalysisLock(false);
   }
 }
 
 async function displayResult(result) {
   currentJsonResult = result;
   currentResult = currentService === 'cu' ? normalizeCuResultForUi(result) : result;
+  currentCuEvidence = null;
   setOverlayControlsEnabled(true);
 
   overlayMode = 'lines';
@@ -6551,8 +7276,10 @@ async function main() {
   initUploadsDisabledBanner();
   initUploadDropzone();
   initServiceSelector();
+  initCuControls();
   _initPickerEvents();
   setupTabs();
+  await loadCuCapabilities();
   await loadModels();
   await loadLibrary();
 
@@ -6641,6 +7368,7 @@ async function main() {
   });
 
   document.getElementById('modelSelect').addEventListener('change', () => {
+    updateCuControlState();
     checkCacheExists();
   });
   document.getElementById('customModelId').addEventListener('input', () => {
