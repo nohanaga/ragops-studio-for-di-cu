@@ -210,3 +210,7 @@ __marimo__/
 __MACOSX/
 
 storage/
+
+# Azure Developer CLI local environment state
+.azure/
+.memo/

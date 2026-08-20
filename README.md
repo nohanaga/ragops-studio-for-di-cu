@@ -185,7 +185,47 @@ Open `http://127.0.0.1:5000/`.
 - PDF preview loads PDF.js from `static/vendor/pdfjs/` if present (local first), otherwise falls back to a CDN.
   - For offline/air-gapped environments, place PDF.js build artifacts (from `pdfjs-dist`) under `static/vendor/pdfjs/`.
 
-## Deploy to Azure Container Apps
+## Deploy with Azure Developer CLI (recommended)
+
+The repository includes an [Azure Developer CLI (`azd`)](https://learn.microsoft.com/azure/developer/azure-developer-cli/overview) template that provisions the infrastructure, builds the repository-root Dockerfile, and deploys the app to Azure Container Apps in one workflow.
+
+### Prerequisites
+
+- [Install Azure Developer CLI](https://learn.microsoft.com/azure/developer/azure-developer-cli/install-azd).
+- Use a subscription where you can create the resources listed below.
+- The deploying identity must be able to create role assignments. `Owner`, or `User Access Administrator` together with resource creation permissions, satisfies this requirement.
+- Choose a [Content Understanding supported region](https://learn.microsoft.com/azure/ai-services/content-understanding/language-region-support). `japaneast` is supported.
+
+### Provision and deploy
+
+```bash
+azd auth login
+azd up
+```
+
+On the first run, select an environment name, subscription, and location. The command provisions:
+
+- Azure AI Document Intelligence
+- Microsoft Foundry resource for Content Understanding
+- Azure Container Registry
+- Azure Container Apps environment and Container App
+- Azure Storage account and private Blob container
+- Log Analytics workspace
+- Managed identities and the required Azure RBAC assignments
+
+Document Intelligence, Content Understanding, Blob Storage, and ACR access are keyless at runtime. The Bicep templates disable local authentication where supported and configure Managed Identity instead of placing API keys in Container Apps settings.
+
+Get the deployed URL after `azd up` completes:
+
+```bash
+azd env get-value AZURE_CONTAINER_APP_URI
+```
+
+Use `azd deploy` for application-only updates, or run `azd up` again when application and infrastructure changes must both be applied. See [Azure Developer CLI Container Apps workflows](https://learn.microsoft.com/azure/developer/azure-developer-cli/container-apps-workflows) for the deployment behavior.
+
+> Content Understanding generative analyzers can additionally require supported Foundry model deployments and resource-level model defaults. These depend on regional model availability and subscription quota, so they are not created by this template. Configure them using the [Content Understanding model deployment guidance](https://learn.microsoft.com/azure/ai-services/content-understanding/concepts/models-deployments) when the selected analyzer requires them.
+
+## Alternative: deploy with Azure CLI scripts
 
 ### Prerequisites
 

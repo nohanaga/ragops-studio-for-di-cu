@@ -187,7 +187,47 @@ python app.py
 - PDF プレビューは `static/vendor/pdfjs/` 配下に PDF.js があればローカル優先で読み込み、無ければ CDN にフォールバックします。
   - オフライン/閉域網で使う場合は、PDF.js（`pdfjs-dist` のビルド成果物）を `static/vendor/pdfjs/` に配置してください。
 
-## Azure Container Apps へのデプロイ
+## Azure Developer CLI によるデプロイ（推奨）
+
+このリポジトリには [Azure Developer CLI（`azd`）](https://learn.microsoft.com/ja-jp/azure/developer/azure-developer-cli/overview) テンプレートが含まれています。インフラストラクチャのプロビジョニング、リポジトリ直下の Dockerfile のビルド、Azure Container Apps へのアプリ配置を一つのワークフローで実行できます。
+
+### 前提条件
+
+- [Azure Developer CLI をインストール](https://learn.microsoft.com/ja-jp/azure/developer/azure-developer-cli/install-azd)してください。
+- 以下に示すリソースを作成できる Azure サブスクリプションを使用してください。
+- デプロイを実行する ID にはロール割り当ての作成権限が必要です。`Owner`、または `User Access Administrator` とリソース作成権限の組み合わせで要件を満たします。
+- [Content Understanding 対応リージョン](https://learn.microsoft.com/ja-jp/azure/ai-services/content-understanding/language-region-support)を選択してください。`japaneast` は対応リージョンです。
+
+### プロビジョニングとデプロイ
+
+```bash
+azd auth login
+azd up
+```
+
+初回実行時に、環境名、サブスクリプション、リージョンを選択します。このコマンドは次のリソースを作成します。
+
+- Azure AI Document Intelligence
+- Content Understanding 用 Microsoft Foundry リソース
+- Azure Container Registry
+- Azure Container Apps 環境および Container App
+- Azure Storage アカウントおよび非公開 Blob コンテナー
+- Log Analytics ワークスペース
+- Managed Identity および必要な Azure RBAC ロール割り当て
+
+実行時の Document Intelligence、Content Understanding、Blob Storage、ACR へのアクセスはキーレスです。Bicep テンプレートは、対応するリソースのローカル認証を無効化し、API キーを Container Apps の設定へ格納せずに Managed Identity を構成します。
+
+`azd up` の完了後、次のコマンドでデプロイ先 URL を確認できます。
+
+```bash
+azd env get-value AZURE_CONTAINER_APP_URI
+```
+
+アプリケーションのみを更新する場合は `azd deploy` を使用します。アプリケーションとインフラストラクチャの両方を更新する場合は、`azd up` を再実行します。動作の詳細は [Azure Developer CLI の Container Apps ワークフロー](https://learn.microsoft.com/ja-jp/azure/developer/azure-developer-cli/container-apps-workflows)を参照してください。
+
+> Content Understanding の生成系アナライザーでは、対応する Foundry モデルの配置とリソースレベルのモデル既定値が追加で必要になる場合があります。これらはリージョンごとのモデル提供状況とサブスクリプションのクォータに依存するため、このテンプレートでは作成しません。選択したアナライザーがモデルを必要とする場合は、[Content Understanding のモデル配置手順](https://learn.microsoft.com/ja-jp/azure/ai-services/content-understanding/concepts/models-deployments)に従って構成してください。
+
+## 代替手段: Azure CLI スクリプトによるデプロイ
 
 ### 前提
 
