@@ -180,7 +180,7 @@ The app supports two Azure AI services in parallel:
 
 ### 2026 Preview Features
 
-The `2026-06-01-preview` profile is selectable only when `CU_ENABLE_PREVIEW=true`. Preview is prerelease and has no SLA.
+The `2026-06-01-preview` profile is always selectable. Preview is prerelease and has no SLA.
 
 | Feature | UI / Implementation | Main Constraint |
 |---|---|---|
@@ -514,13 +514,15 @@ Displays: total paths, different paths, same paths.
 
 ## 16. User Tabs (Plugin HTML Tabs)
 
+User tabs are hidden by default. Set `USER_TABS_ENABLED=true` to load and display the user-tab navigation.
+
 ### Mechanism
 
 1. Place `.html` files under `usertab/<lang>/` (e.g., `usertab/en/my-tab.html`, `usertab/ja/my-tab.html`).
 2. On load, `GET /api/usertabs?lang=<lang>` returns the list of available tabs.
 3. Each tab's HTML is fetched via `GET /api/usertabs/<name>?lang=<lang>`.
 4. HTML is **sanitized with DOMPurify** (strict allowlist: no `<script>`, `<iframe>`, `<form>`, `<input>`, etc.; no `on*` event attributes).
-5. Tabs appear in the right result panel after the built-in tabs.
+5. Tabs appear in a dedicated user-tab area in the right result panel.
 
 ### Tab Title
 
@@ -842,13 +844,13 @@ PowerShell script that automates the full deployment:
 | `CU_ENDPOINT` | Yes* | — | Content Understanding endpoint URL |
 | `CU_KEY` | Conditional | — | CU API key (required for key/auto mode) |
 | `CU_AUTH_MODE` | No | `auto` | `key` / `identity` / `auto` |
-| `CU_ENABLE_PREVIEW` | No | `false` | Enables the CU Preview API and UI only when set to `true` |
 | `ANALYSIS_WORKERS` | No | `4` | Concurrent analysis workers per process |
 | `ANALYSIS_QUEUE_SIZE` | No | `32` | Maximum pending analysis jobs per process |
 | `STORAGE_BACKEND` | No | `local` | `local` / `blob` |
 | `AZURE_STORAGE_ACCOUNT_NAME` | Conditional | — | Required for blob mode |
 | `AZURE_STORAGE_CONTAINER_NAME` | No | `appstorage` | Blob container name |
 | `UPLOADS_ENABLED` | No | `true` | Enable file uploads (`true`/`false`) |
+| `USER_TABS_ENABLED` | No | `false` | Load and display user tabs when set to `true` |
 | `UI_DEFAULT_LANG` | No | `ja` | Default UI language (`ja`/`en`) |
 | `HOST` | No | `0.0.0.0` | Flask bind host |
 | `PORT` | No | `5000` (dev) / `8000` (container) | Flask bind port |

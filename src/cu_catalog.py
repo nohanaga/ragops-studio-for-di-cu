@@ -115,7 +115,7 @@ def supports_sync(analyzer_id: str) -> bool:
     return analyzer_id in {"prebuilt-read", "prebuilt-layout"}
 
 
-def build_capabilities(*, preview_enabled: bool) -> dict[str, Any]:
+def build_capabilities() -> dict[str, Any]:
     return {
         "defaultProfile": "ga",
         "profiles": {
@@ -126,7 +126,7 @@ def build_capabilities(*, preview_enabled: bool) -> dict[str, Any]:
             },
             "preview": {
                 "apiVersion": CU_API_VERSION_PREVIEW,
-                "enabled": preview_enabled,
+                "enabled": True,
                 "executionModes": ["async", "sync"],
             },
         },

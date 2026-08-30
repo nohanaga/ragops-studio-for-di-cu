@@ -180,7 +180,7 @@ storage/
 
 ### 2026 Preview 機能
 
-`CU_ENABLE_PREVIEW=true` の場合だけ、`2026-06-01-preview` プロファイルを選択できます。Preview は一般提供前であり、SLA はありません。
+`2026-06-01-preview` プロファイルは常に選択できます。Preview は一般提供前であり、SLA はありません。
 
 | 機能 | UI / 実装 | 主な制約 |
 |---|---|---|
@@ -514,13 +514,15 @@ storage/cache/
 
 ## 16. ユーザータブ (プラグイン HTML タブ)
 
+ユーザータブはデフォルトで非表示です。`USER_TABS_ENABLED=true` を設定すると、ユーザータブを読み込んで表示します。
+
 ### メカニズム
 
 1. `usertab/<lang>/` に `.html` ファイルを配置（例: `usertab/en/my-tab.html`, `usertab/ja/my-tab.html`）。
 2. ロード時に `GET /api/usertabs?lang=<lang>` で利用可能なタブ一覧を取得。
 3. 各タブの HTML が `GET /api/usertabs/<name>?lang=<lang>` で取得される。
 4. HTML は **DOMPurify でサニタイズ**（厳格な許可リスト: `<script>`, `<iframe>`, `<form>`, `<input>` 等なし、`on*` イベント属性なし）。
-5. 右結果パネルの組み込みタブの後にタブが表示。
+5. 右結果パネルの専用ユーザータブ領域に表示。
 
 ### タブタイトル
 
@@ -842,13 +844,13 @@ form-action 'self'
 | `CU_ENDPOINT` | はい* | — | Content Understanding エンドポイント URL |
 | `CU_KEY` | 条件付き | — | CU API キー（key/auto モード時に必要） |
 | `CU_AUTH_MODE` | いいえ | `auto` | `key` / `identity` / `auto` |
-| `CU_ENABLE_PREVIEW` | いいえ | `false` | `true` の場合だけ CU Preview API と UI を有効化 |
 | `ANALYSIS_WORKERS` | いいえ | `4` | プロセスごとの同時解析ワーカー数 |
 | `ANALYSIS_QUEUE_SIZE` | いいえ | `32` | プロセスごとの最大待機ジョブ数 |
 | `STORAGE_BACKEND` | いいえ | `local` | `local` / `blob` |
 | `AZURE_STORAGE_ACCOUNT_NAME` | 条件付き | — | Blob モード時に必要 |
 | `AZURE_STORAGE_CONTAINER_NAME` | いいえ | `appstorage` | Blob コンテナ名 |
 | `UPLOADS_ENABLED` | いいえ | `true` | ファイルアップロードの有効化（`true`/`false`） |
+| `USER_TABS_ENABLED` | いいえ | `false` | `true` の場合はユーザータブを読み込んで表示 |
 | `UI_DEFAULT_LANG` | いいえ | `ja` | デフォルト UI 言語（`ja`/`en`） |
 | `HOST` | いいえ | `0.0.0.0` | Flask バインドホスト |
 | `PORT` | いいえ | `5000` (dev) / `8000` (container) | Flask バインドポート |

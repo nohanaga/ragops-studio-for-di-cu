@@ -20,7 +20,6 @@ from src.cu_service import (
     analyze_content_bytes,
     analyze_content_file,
     is_cu_configured,
-    is_cu_preview_enabled,
     validate_cu_request,
 )
 from src.cu_types import CuAnalyzeRequest, CuRequestError
@@ -184,17 +183,24 @@ def create_app() -> Flask:
     # Demo safety: disable uploads to avoid unintended changes by other users.
     # (Re-enable by editing this constant.)
     UPLOADS_ENABLED = str(os.getenv("UPLOADS_ENABLED", "true")).strip().lower() in {"1", "true", "yes", "y", "on"}
+    USER_TABS_ENABLED = str(os.getenv("USER_TABS_ENABLED", "false")).strip().lower() in {"1", "true", "yes", "y", "on"}
 
     UI_DEFAULT_LANG = str(os.getenv("UI_DEFAULT_LANG", "ja")).strip().lower()
     if UI_DEFAULT_LANG not in {"ja", "en"}:
         UI_DEFAULT_LANG = "ja"
 
     CU_ENABLED = is_cu_configured()
-    CU_PREVIEW_ENABLED = is_cu_preview_enabled()
 
     @app.get("/")
     def index():
-        return render_template("index.html", uploads_enabled=UPLOADS_ENABLED, default_lang=UI_DEFAULT_LANG, cu_enabled=CU_ENABLED, csp_nonce=g.csp_nonce)
+        return render_template(
+            "index.html",
+            uploads_enabled=UPLOADS_ENABLED,
+            user_tabs_enabled=USER_TABS_ENABLED,
+            default_lang=UI_DEFAULT_LANG,
+            cu_enabled=CU_ENABLED,
+            csp_nonce=g.csp_nonce,
+        )
 
     @app.get("/api/health")
     def health():
@@ -514,7 +520,7 @@ def create_app() -> Flask:
     # ── Content Understanding API ──────────────────────────────
     @app.get("/api/cu/capabilities")
     def get_cu_capabilities():
-        return jsonify(build_capabilities(preview_enabled=CU_PREVIEW_ENABLED))
+        return jsonify(build_capabilities())
 
     @app.get("/api/cu/models")
     def list_cu_models():
@@ -523,8 +529,6 @@ def create_app() -> Flask:
         requested_profile = request.args.get("apiProfile", "ga")
         if requested_profile not in {"ga", "preview"}:
             return jsonify({"error": "apiProfile must be 'ga' or 'preview'"}), 400
-        if requested_profile == "preview" and not CU_PREVIEW_ENABLED:
-            return jsonify({"error": "Content Understanding Preview is disabled"}), 400
         api_profile = "preview" if requested_profile == "preview" else "ga"
         return jsonify({"models": get_cu_models(api_profile)})
 

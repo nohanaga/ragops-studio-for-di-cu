@@ -10,6 +10,7 @@
   <script nonce="{{ csp_nonce }}">
     window.__APP_CONFIG__ = {
       uploadsEnabled: {{ 'true' if uploads_enabled else 'false' }},
+      userTabsEnabled: {{ 'true' if user_tabs_enabled else 'false' }},
       defaultLang: "{{ default_lang }}",
       cuEnabled: {{ 'true' if cu_enabled else 'false' }}
     };
@@ -439,7 +440,7 @@
             </div>
           </div>
           <div id="preview" class="preview">
-            <div class="hint" data-i18n="preview.hint">アップロード後に表示します（PDFはPDF.js描画＋BBoxオーバーレイ）</div>
+            <div class="hint" data-i18n="preview.hint">アップロード後に表示します</div>
             <div id="busyOverlay" class="busy" aria-hidden="true">
               <div class="busy__card">
                 <div class="busy__spinner" aria-hidden="true"></div>
@@ -544,6 +545,11 @@
           <button class="tab" data-tab="json" data-i18n="results.tabs.json">Response JSON</button>
           <button class="tab" data-tab="requestJson" data-i18n="results.tabs.requestJson">Request JSON</button>
         </div>
+
+        <nav class="user-tabs" id="userTabsNav" aria-label="User tabs" data-i18n-aria-label="results.userTabs" hidden>
+          <span class="user-tabs__label" data-i18n="results.userTabs">ユーザータブ</span>
+          <div class="user-tabs__list" id="userTabs" role="tablist"></div>
+        </nav>
 
         <div class="tabpane tabpane--active" id="tab-summary">
           <pre class="pre" id="summaryText">-</pre>

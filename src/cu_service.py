@@ -610,11 +610,6 @@ def _validate_execution(
     execution_mode: CuExecutionMode,
     options: dict[str, Any],
 ) -> None:
-    if api_profile == "preview" and not is_cu_preview_enabled():
-        raise CuRequestError(
-            "Content Understanding Preview is disabled",
-            code="preview_disabled",
-        )
     if api_profile == "ga" and is_preview_only_analyzer(analyzer_id):
         raise CuRequestError(
             f"{analyzer_id} requires the Preview API profile",
@@ -744,12 +739,3 @@ def _attach_studio_metadata(
 def is_cu_configured() -> bool:
     """Check if the Content Understanding endpoint is configured."""
     return bool(os.environ.get("CU_ENDPOINT", "").strip())
-
-
-def is_cu_preview_enabled() -> bool:
-    return os.environ.get("CU_ENABLE_PREVIEW", "false").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }

@@ -31,6 +31,9 @@ param(
     [Parameter(Mandatory = $false)]
     [bool]$UploadsEnabled = $true,
 
+    [Parameter(Mandatory = $false)]
+    [bool]$UserTabsEnabled = $false,
+
     # === Persistent Storage Configuration (Azure Files) ===
     # Storage account name (auto-generated if not provided)
     [Parameter(Mandatory = $false)]
@@ -89,10 +92,6 @@ param(
     [Parameter(Mandatory = $false)]
     [ValidateSet("key", "identity")]
     [string]$CuAuthMode = "key",
-
-    # Enable prerelease Content Understanding API features (no SLA)
-    [Parameter(Mandatory = $false)]
-    [bool]$CuEnablePreview = $false,
 
     # Content Understanding resource name (required for identity mode to assign RBAC role)
     [Parameter(Mandatory = $false)]
@@ -381,6 +380,7 @@ catch {
 
 $ImageTag = Get-DefaultImageTag -Tag $ImageTag
 $uploadsEnvValue = if ($UploadsEnabled) { "true" } else { "false" }
+$userTabsEnvValue = if ($UserTabsEnabled) { "true" } else { "false" }
 
 # Resolve resource groups (defaults to main resource group)
 if (-not $DiResourceGroupName) { $DiResourceGroupName = $ResourceGroupName }
@@ -608,7 +608,7 @@ if (-not $appExists) {
     # Build env vars list
     $envVarsList = @(
         "UPLOADS_ENABLED=$uploadsEnvValue",
-        "CU_ENABLE_PREVIEW=$($CuEnablePreview.ToString().ToLowerInvariant())"
+        "USER_TABS_ENABLED=$userTabsEnvValue"
     )
     if ($di) {
         if ($DiAuthMode -eq "identity") {
@@ -739,7 +739,7 @@ else {
     # ── Build env vars ─────────────────────────────────────────
     $setEnvVars = @(
         "UPLOADS_ENABLED=$uploadsEnvValue",
-        "CU_ENABLE_PREVIEW=$($CuEnablePreview.ToString().ToLowerInvariant())"
+        "USER_TABS_ENABLED=$userTabsEnvValue"
     )
     if ($di) {
         $setEnvVars += @("DI_AUTH_MODE=$DiAuthMode")

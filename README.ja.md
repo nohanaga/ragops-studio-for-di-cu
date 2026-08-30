@@ -138,7 +138,6 @@ DI_KEY=<your-di-key>          # identity モードなら不要
 CU_ENDPOINT=https://<your-cu>.cognitiveservices.azure.com/
 CU_KEY=<your-cu-key>
 # CU_AUTH_MODE=auto
-# CU_ENABLE_PREVIEW=false      # true で 2026-06-01-preview を明示的に有効化
 
 # 解析ジョブ
 # ANALYSIS_WORKERS=4           # プロセスごとの同時解析数
@@ -151,16 +150,16 @@ CU_KEY=<your-cu-key>
 
 # UI
 # UPLOADS_ENABLED=true         # false でアップロード無効化
+# USER_TABS_ENABLED=false      # true でユーザータブを表示
 # UI_DEFAULT_LANG=ja           # ja / en
 ```
 
 ### Content Understanding の API プロファイル
 
 - 既定は GA `2025-11-01` です。Python SDK は `azure-ai-contentunderstanding>=1.1.0,<1.2.0` に固定しています。
-- `CU_ENABLE_PREVIEW=true` の場合に限り、画面で Preview `2026-06-01-preview` を選択できます。Preview を GA へ自動フォールバックすることはありません。
+- 画面では Preview `2026-06-01-preview` を常に選択できます。Preview を GA へ自動フォールバックすることはありません。
 - Preview では Read/Layout の同期解析、Agentic ワークフロー、ページ内分割、Preview 税務アナライザーを利用できます。Preview は一般提供前であり、SLA はありません。
 - 結果には API バージョン、実行方式、実効アナライザーを記録し、署名、文書メタデータ、セグメント、フィールド根拠を表示します。
-- Azure Container Apps 配置では PowerShell の `-CuEnablePreview $true`、または Bash の `--cu-enable-preview true` で同じ機能フラグを設定できます。
 
 公式資料: [Content Understanding の新機能](https://learn.microsoft.com/azure/ai-services/content-understanding/whats-new)、[同期 REST API](https://learn.microsoft.com/azure/ai-services/content-understanding/quickstart/use-synchronous-rest-api)
 

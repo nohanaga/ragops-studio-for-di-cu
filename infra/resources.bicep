@@ -213,10 +213,6 @@ resource containerApp 'Microsoft.App/containerApps@2025-01-01' = {
               value: 'identity'
             }
             {
-              name: 'CU_ENABLE_PREVIEW'
-              value: 'false'
-            }
-            {
               name: 'CU_ENDPOINT'
               value: contentUnderstanding.properties.endpoint
             }
@@ -239,6 +235,10 @@ resource containerApp 'Microsoft.App/containerApps@2025-01-01' = {
             {
               name: 'UPLOADS_ENABLED'
               value: 'true'
+            }
+            {
+              name: 'USER_TABS_ENABLED'
+              value: 'false'
             }
           ]
           resources: {

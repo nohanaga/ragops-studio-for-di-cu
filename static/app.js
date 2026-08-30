@@ -17,6 +17,7 @@ let currentCuEvidence = null;
 
 // Uploads are controlled by server-side env var and injected into the page.
 const UPLOADS_ENABLED = !!(window.__APP_CONFIG__ && window.__APP_CONFIG__.uploadsEnabled);
+const USER_TABS_ENABLED = !!(window.__APP_CONFIG__ && window.__APP_CONFIG__.userTabsEnabled);
 const CU_ENABLED = !!(window.__APP_CONFIG__ && window.__APP_CONFIG__.cuEnabled);
 let cuCapabilities = null;
 
@@ -88,6 +89,7 @@ const I18N = {
     'results.tabs.items': '項目',
     'results.tabs.json': 'Response JSON',
     'results.tabs.requestJson': 'Request JSON',
+    'results.userTabs': 'ユーザータブ',
 
     'action.analyze': '解析',
     'action.upload': 'アップロード',
@@ -240,7 +242,7 @@ const I18N = {
     'preview.next': '次へ',
     'preview.page': 'ページ {n}',
     'preview.bbox': 'BBox',
-    'preview.hint': 'アップロード後に表示します（PDFはPDF.js描画＋BBoxオーバーレイ）',
+    'preview.hint': 'アップロード後に表示します',
     'preview.hintShort': 'アップロード後に表示します',
     'preview.failed': 'プレビューの表示に失敗しました',
 
@@ -532,6 +534,7 @@ const I18N = {
     'results.tabs.items': 'Items',
     'results.tabs.json': 'Response JSON',
     'results.tabs.requestJson': 'Request JSON',
+    'results.userTabs': 'User tabs',
 
     'action.analyze': 'Analyze',
     'action.upload': 'Upload',
@@ -684,7 +687,7 @@ const I18N = {
     'preview.next': 'Next',
     'preview.page': 'Page {n}',
     'preview.bbox': 'BBox',
-    'preview.hint': 'Shown after upload (PDF uses PDF.js rendering + BBox overlay)',
+    'preview.hint': 'Shown after upload',
     'preview.hintShort': 'Shown after upload',
     'preview.failed': 'Failed to render preview',
 
@@ -2193,11 +2196,17 @@ function initTooltipDismissOnResponsive() {
 }
 
 function activateTab(target) {
-  // Right pane: built-in + user tabs
-  const tabs = Array.from(document.querySelectorAll('#resultTabs .tab[data-tab]'));
-  for (const x of tabs) x.classList.remove('tab--active');
+  // Right pane: built-in results and user tabs use separate navigation groups.
+  const tabs = Array.from(document.querySelectorAll('#resultTabs .tab[data-tab], #userTabs .user-tab[data-tab]'));
+  for (const x of tabs) {
+    x.classList.remove('tab--active', 'user-tab--active');
+    x.setAttribute('aria-selected', 'false');
+  }
   const btn = tabs.find(t => t.dataset.tab === target);
-  if (btn) btn.classList.add('tab--active');
+  if (btn) {
+    btn.classList.add(btn.classList.contains('user-tab') ? 'user-tab--active' : 'tab--active');
+    btn.setAttribute('aria-selected', 'true');
+  }
 
   // Built-in panes
   document.getElementById('tab-summary').classList.toggle('tabpane--active', target === 'summary');
@@ -3522,16 +3531,16 @@ async function switchService(service) {
 }
 
 async function loadCuCapabilities() {
-  const gaOnly = {
+  const defaultCapabilities = {
     defaultProfile: 'ga',
     profiles: {
       ga: { apiVersion: '2025-11-01', enabled: true, executionModes: ['async'] },
-      preview: { apiVersion: '2026-06-01-preview', enabled: false, executionModes: ['async', 'sync'] },
+      preview: { apiVersion: '2026-06-01-preview', enabled: true, executionModes: ['async', 'sync'] },
     },
   };
 
   if (!CU_ENABLED) {
-    cuCapabilities = gaOnly;
+    cuCapabilities = defaultCapabilities;
     updateCuControlState();
     return;
   }
@@ -3541,8 +3550,8 @@ async function loadCuCapabilities() {
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     cuCapabilities = await response.json();
   } catch (error) {
-    console.warn('Failed to load CU capabilities; using GA-only controls.', error);
-    cuCapabilities = gaOnly;
+    console.warn('Failed to load CU capabilities; using default controls.', error);
+    cuCapabilities = defaultCapabilities;
   }
   updateCuControlState();
 }
@@ -5290,24 +5299,38 @@ async function pollJob(jobId) {
 }
 
 async function loadUserTabs() {
+  if (!USER_TABS_ENABLED) {
+    const tabsNav = document.getElementById('userTabsNav');
+    const tabsContainer = document.getElementById('userTabs');
+    const panesContainer = document.getElementById('userTabPanes');
+    if (tabsNav) tabsNav.hidden = true;
+    tabsContainer?.replaceChildren();
+    panesContainer?.replaceChildren();
+    return;
+  }
+
   try {
     const lang = currentLang || 'en';
     const res = await fetch(`/api/usertabs?lang=${encodeURIComponent(lang)}`);
     if (!res.ok) return;
     const data = await res.json();
-    const tabsContainer = document.getElementById('resultTabs');
+    const tabsContainer = document.getElementById('userTabs');
+    const tabsNav = document.getElementById('userTabsNav');
     const panesContainer = document.getElementById('userTabPanes');
-    if (!tabsContainer || !panesContainer || !data.tabs) return;
+    if (!tabsContainer || !tabsNav || !panesContainer || !data.tabs) return;
 
     // Remove previously loaded usertab buttons and panes
-    tabsContainer.querySelectorAll('.tab[data-tab^="usertab-"]').forEach(el => el.remove());
+    tabsContainer.querySelectorAll('.user-tab[data-tab^="usertab-"]').forEach(el => el.remove());
     panesContainer.querySelectorAll('.usertab-pane').forEach(el => el.remove());
+    tabsNav.hidden = data.tabs.length === 0;
 
     for (const tab of data.tabs) {
       // Tab button
       const tabBtn = document.createElement('button');
-      tabBtn.className = 'tab';
+      tabBtn.className = 'user-tab';
       tabBtn.type = 'button';
+      tabBtn.setAttribute('role', 'tab');
+      tabBtn.setAttribute('aria-selected', 'false');
       tabBtn.dataset.tab = `usertab-${tab.name}`;
       tabBtn.textContent = tab.title || tab.name;
       tabBtn.addEventListener('click', () => activateTab(`usertab-${tab.name}`));
