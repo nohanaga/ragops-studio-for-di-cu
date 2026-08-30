@@ -187,9 +187,10 @@ class CuPreviewAdapter:
             if status in {"failed", "canceled", "cancelled"}:
                 error = payload.get("error")
                 message = "Content Understanding operation failed"
-                if isinstance(error, Mapping) and error.get("message"):
-                    message = str(error["message"])
-                raise CuPreviewRestError(message)
+                error_code = None
+                if isinstance(error, Mapping):
+                    message, error_code = self._format_service_error(error, message)
+                raise CuPreviewRestError(message, error_code=error_code)
             retry_after = response.headers.get("Retry-After", "1")
             try:
                 delay = max(1.0, min(float(retry_after), 10.0))
@@ -219,9 +220,8 @@ class CuPreviewAdapter:
         if isinstance(payload, Mapping):
             error = payload.get("error")
             if isinstance(error, Mapping):
-                error_code = str(error.get("code") or error_code or "") or None
-                if error.get("message"):
-                    message = str(error["message"])
+                message, payload_code = CuPreviewAdapter._format_service_error(error, message)
+                error_code = payload_code or error_code
         if response.status_code == 429:
             message = f"{message} Model deployment capacity may be insufficient."
         raise CuPreviewRestError(
@@ -229,3 +229,33 @@ class CuPreviewAdapter:
             status_code=response.status_code,
             error_code=error_code,
         )
+
+    @staticmethod
+    def _format_service_error(error: Mapping[str, Any], fallback: str) -> tuple[str, str | None]:
+        lines: list[str] = []
+        root_code = str(error.get("code") or "") or None
+
+        def collect(value: Any) -> None:
+            if not isinstance(value, Mapping):
+                return
+            code = value.get("code")
+            message = value.get("message")
+            target = value.get("target")
+            if message:
+                line = str(message).strip()
+                if code:
+                    line = f"[{code}] {line}"
+                if target:
+                    line = f"{line} (target: {target})"
+                if line and line not in lines:
+                    lines.append(line)
+            for key in ("details", "innererror", "innerError"):
+                nested = value.get(key)
+                if isinstance(nested, list):
+                    for item in nested:
+                        collect(item)
+                else:
+                    collect(nested)
+
+        collect(error)
+        return "\n".join(lines) or fallback, root_code

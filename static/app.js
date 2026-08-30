@@ -187,6 +187,7 @@ const I18N = {
     'jobs.dismiss': '一覧から削除',
     'jobs.queued': '待機中',
     'jobs.running': '実行中',
+    'jobs.processing': '処理中',
     'jobs.succeeded': '完了',
     'jobs.failed': '失敗',
     'jobs.timeout': '監視タイムアウト',
@@ -221,6 +222,10 @@ const I18N = {
     'library.deleteConfirm': '「{name}」のキャッシュとファイルを削除しますか？',
     'library.deleted': '削除しました（キャッシュ: {caches}件, ファイル: {docs}件）',
     'library.deleteFailed': '削除に失敗しました',
+    'library.deleteSelected': '選択したキャッシュを削除',
+    'library.deleteSelectedConfirm': '選択したキャッシュ {count}件だけを削除しますか？ 元ファイルと未選択のキャッシュは保持されます。',
+    'library.deleteSelectedDone': '選択したキャッシュを削除しました（{count}件）',
+    'library.deleteSelectedFailed': '{total}件中{failed}件のキャッシュ削除に失敗しました',
     'library.tabLoadFailed': 'タブの読み込みに失敗しました',
 
     'splitter.left': '入力/モデルとプレビューの幅調整',
@@ -453,8 +458,9 @@ const I18N = {
 
     'compare.button': '比較',
     'compare.title': '結果比較（セマンティック Diff）',
+    'compare.titleSingle': '結果表示（セマンティックパス）',
     'compare.close': '比較を閉じる',
-    'compare.selectTwo': '2つ以上のキャッシュ結果にチェックを入れてください',
+    'compare.selectOne': '1つ以上のキャッシュ結果にチェックを入れてください',
     'compare.loading': '結果を読み込み中…',
     'compare.identical': '同一',
     'compare.added': '追加',
@@ -469,6 +475,7 @@ const I18N = {
     'compare.stats': '合計: {total} パス / 差分: {diffs} / 同一: {same}',
     'compare.noResults': '比較する結果がありません',
     'compare.path': 'パス',
+    'compare.structureBoundary': 'ここから異なるパス',
   },
   en: {
     'app.title.di': 'RAGOps Studio for Document Intelligence',
@@ -624,6 +631,7 @@ const I18N = {
     'jobs.dismiss': 'Remove from list',
     'jobs.queued': 'Queued',
     'jobs.running': 'Running',
+    'jobs.processing': 'Processing',
     'jobs.succeeded': 'Completed',
     'jobs.failed': 'Failed',
     'jobs.timeout': 'Monitoring timed out',
@@ -658,6 +666,10 @@ const I18N = {
     'library.deleteConfirm': 'Delete cache and file for "{name}"?',
     'library.deleted': 'Deleted (caches: {caches}, files: {docs})',
     'library.deleteFailed': 'Failed to delete',
+    'library.deleteSelected': 'Delete selected caches',
+    'library.deleteSelectedConfirm': 'Delete only the {count} selected cached result(s)? Source files and unselected caches will be preserved.',
+    'library.deleteSelectedDone': 'Selected caches deleted ({count})',
+    'library.deleteSelectedFailed': 'Failed to delete {failed} of {total} cached result(s)',
     'library.tabLoadFailed': 'Failed to load the tab',
 
     'splitter.left': 'Resize Input/Preview',
@@ -884,8 +896,9 @@ const I18N = {
 
     'compare.button': 'Compare',
     'compare.title': 'Result Comparison (Semantic Diff)',
+    'compare.titleSingle': 'Result View (Semantic Paths)',
     'compare.close': 'Close comparison',
-    'compare.selectTwo': 'Check 2 or more cached results to compare',
+    'compare.selectOne': 'Check 1 or more cached results',
     'compare.loading': 'Loading results…',
     'compare.identical': 'Identical',
     'compare.added': 'Added',
@@ -900,6 +913,7 @@ const I18N = {
     'compare.stats': 'Total: {total} paths / Diffs: {diffs} / Same: {same}',
     'compare.noResults': 'No results to compare',
     'compare.path': 'Path',
+    'compare.structureBoundary': 'Paths differ from here',
   },
 };
 
@@ -1742,6 +1756,23 @@ function initUploadDropzone() {
 
 function setStatus(text) {
   document.getElementById('statusText').textContent = text;
+}
+
+function showAnalysisError(message, statusKey = 'status.analyzeFailed') {
+  const detail = String(message || tr('error.analyzeFailedGeneric')).trim();
+  setStatus(`${tr(statusKey)}: ${detail}`);
+
+  const summary = document.getElementById('summaryText');
+  if (summary) summary.textContent = detail;
+
+  const items = document.getElementById('itemsRoot');
+  if (items) {
+    const error = document.createElement('div');
+    error.className = 'hint';
+    error.textContent = detail;
+    items.replaceChildren(error);
+  }
+  return detail;
 }
 
 function setCacheInfo(text) {
@@ -3540,7 +3571,7 @@ function initCuControls() {
   const profileSelect = document.getElementById('cuApiProfile');
   profileSelect?.addEventListener('change', async () => {
     updateCuControlState();
-    await loadModels();
+    await loadModels({ preserveSelection: true });
     await checkCacheExists();
   });
 
@@ -4140,10 +4171,15 @@ function _addSchemaRow(name, type, desc) {
   row.querySelector('.schema-row-del').addEventListener('click', () => {
     row.remove();
     _syncTableToJson();
+    void checkCacheExists();
   });
   row.querySelectorAll('input, select').forEach(el => {
-    el.addEventListener('input', () => _syncTableToJson());
-    el.addEventListener('change', () => _syncTableToJson());
+    const syncSchema = () => {
+      _syncTableToJson();
+      void checkCacheExists();
+    };
+    el.addEventListener('input', syncSchema);
+    el.addEventListener('change', syncSchema);
   });
 }
 
@@ -4172,14 +4208,16 @@ function _syncTableToJson() {
   if (!textarea) return;
   const obj = _readTableRows();
   textarea.value = Object.keys(obj).length ? JSON.stringify(obj, null, 2) : '';
-  textarea.dispatchEvent(new Event('input'));
 }
 
 function _syncJsonToTable() {
   const textarea = document.getElementById('optCuFieldSchema');
   if (!textarea) return;
   const raw = textarea.value.trim();
-  if (!raw) return;
+  if (!raw) {
+    _populateTableFromObj({});
+    return;
+  }
   try {
     const obj = JSON.parse(raw);
     if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
@@ -4253,7 +4291,8 @@ function _initPickerEvents() {
   document.addEventListener('click', () => _closePickerDropdown());
 }
 
-async function loadModels() {
+async function loadModels({ preserveSelection = false } = {}) {
+  const previousModelId = preserveSelection ? getModelId() : '';
   const endpoint = currentService === 'cu'
     ? `/api/cu/models?apiProfile=${encodeURIComponent(getCuApiProfile())}`
     : '/api/models';
@@ -4276,18 +4315,23 @@ async function loadModels() {
     select.appendChild(opt);
   }
 
-  // Auto-select first non-US model (or first model)
+  // Preserve the current model across API profile changes when supported.
+  const previous = _pickerModels.find((model) => model.id === previousModelId);
   const first = _pickerModels.find((m) => !m.us) || _pickerModels[0];
-  if (first) {
-    _pickerSelected = first.id;
-    select.value = first.id;
+  const selected = previous || first;
+  if (selected) {
+    _pickerSelected = selected.id;
+    select.value = selected.id;
+  } else {
+    _pickerSelected = '';
   }
 
   // Update picker button label
   const btn = document.getElementById('modelPickerLabel');
-  if (btn) btn.textContent = first ? getModelDisplayLabel(first.id) : '…';
+  if (btn) btn.textContent = selected ? getModelDisplayLabel(selected.id) : '…';
 
   _renderPickerList();
+  _updateFieldSchemaVisibility();
   updateCuControlState();
 }
 
@@ -4519,6 +4563,88 @@ async function loadDocumentFromLibrary(doc) {
   }
 }
 
+function getCachedResultContext(rawResult) {
+  const payload = rawResult?.result && typeof rawResult.result === 'object'
+    ? rawResult.result
+    : (rawResult || {});
+  const studio = rawResult?._studio || payload?._studio || {};
+  const analyzerId = studio.requestedAnalyzerId
+    || payload.analyzerId
+    || payload.analyzer_id
+    || rawResult?.analyzerId
+    || rawResult?.analyzer_id;
+  const isCu = !!(
+    analyzerId
+    || studio.apiProfile
+    || studio.requestedAnalyzerId
+    || studio.effectiveAnalyzerId
+  );
+
+  let apiProfile = studio.apiProfile;
+  const apiVersion = studio.apiVersion || payload.apiVersion || payload.api_version || '';
+  if (isCu && !['ga', 'preview'].includes(apiProfile)) {
+    apiProfile = String(apiVersion).includes('preview') ? 'preview' : 'ga';
+  }
+
+  return {
+    service: isCu ? 'cu' : 'di',
+    apiProfile: isCu ? apiProfile : null,
+    executionMode: isCu ? (studio.executionMode || 'async') : null,
+    modelId: isCu
+      ? analyzerId
+      : (payload.modelId || payload.model_id || rawResult?.modelId || rawResult?.model_id || ''),
+  };
+}
+
+function baseModelIdFromDerivedAnalyzer(analyzerId) {
+  if (!analyzerId?.startsWith('studio.')) return analyzerId || '';
+  const parts = analyzerId.split('.');
+  const sourcePart = parts.find(part => part.startsWith('prebuilt_'))
+    || parts.find((part, index) => index > 0 && !['p26', 'g25'].includes(part));
+  return sourcePart ? sourcePart.replace(/_/g, '-') : analyzerId;
+}
+
+async function applyCachedResultContext(context) {
+  if (context.service === 'cu') {
+    const profileSelect = document.getElementById('cuApiProfile');
+    const profileChanged = !!(
+      profileSelect
+      && context.apiProfile
+      && profileSelect.value !== context.apiProfile
+    );
+    if (profileSelect && context.apiProfile) profileSelect.value = context.apiProfile;
+
+    if (currentService !== 'cu') {
+      await switchService('cu');
+    } else if (profileChanged) {
+      updateCuControlState();
+      await loadModels({ preserveSelection: true });
+    }
+  } else if (currentService !== 'di') {
+    await switchService('di');
+  }
+
+  const modelId = context.service === 'cu'
+    ? baseModelIdFromDerivedAnalyzer(context.modelId)
+    : context.modelId;
+  const customModel = document.getElementById('customModelId');
+  if (context.service === 'di' && customModel) customModel.value = '';
+  const found = _pickerModels.find(model => model.id === modelId);
+  if (found) {
+    _selectPickerModel(found.id);
+  } else if (context.service === 'di' && modelId) {
+    if (customModel) customModel.value = modelId;
+  }
+
+  if (context.service === 'cu') {
+    const executionSelect = document.getElementById('cuExecutionMode');
+    if (executionSelect && context.executionMode) {
+      executionSelect.value = context.executionMode;
+    }
+    updateCuControlState();
+  }
+}
+
 async function loadCachedVariant(doc, encodedKey) {
   clearUiForNewUpload();
   currentDocument = doc;
@@ -4543,33 +4669,12 @@ async function loadCachedVariant(doc, encodedKey) {
       return;
     }
 
-    currentOutputContentFormat = cacheData.result.contentFormat || '';
+    const resultPayload = cacheData.result?.result || cacheData.result;
+    currentOutputContentFormat = resultPayload?.contentFormat || '';
 
-    // Restore service mode and model selection from cached result
-    const isCuResult = !!cacheData.result.analyzerId;
-    const targetService = isCuResult ? 'cu' : 'di';
-    if (targetService !== currentService) {
-      await switchService(targetService);
-    }
-    const cachedModelId = isCuResult
-      ? cacheData.result.analyzerId
-      : cacheData.result.modelId;
-    if (cachedModelId) {
-      // Strip derived analyzer prefix (e.g. "studio.prebuilt_image.abc123" → "prebuilt-image")
-      let modelToSelect = cachedModelId;
-      if (modelToSelect.startsWith('studio.')) {
-        // Derived analyzer: extract original model name from second segment
-        const parts = modelToSelect.split('.');
-        if (parts.length >= 2) {
-          modelToSelect = parts[1].replace(/_/g, '-');
-        }
-      }
-      // Select the model if it exists in the picker
-      const found = _pickerModels.find(m => m.id === modelToSelect);
-      if (found) {
-        _selectPickerModel(found.id);
-      }
-    }
+    // Restore the exact service/profile/mode/model before displaying or rerunning.
+    const cachedContext = getCachedResultContext(cacheData.result);
+    await applyCachedResultContext(cachedContext);
 
     await displayResult(cacheData.result);
 
@@ -4578,6 +4683,8 @@ async function loadCachedVariant(doc, encodedKey) {
     if (meta && meta.options && typeof meta.options === 'object') {
       _restoreOptionsFromMeta(meta.options);
     }
+
+    await checkCacheExists();
 
     setBusy(false);
 
@@ -4634,6 +4741,18 @@ function _restoreOptionsFromMeta(opts) {
     field_schema:           { id: 'optCuFieldSchema',        type: 'json' },
   };
 
+  // The cache metadata is a complete sparse option set. Clear controls first
+  // so options from a previously viewed result cannot leak into a rerun.
+  for (const conf of Object.values(mapping)) {
+    const el = document.getElementById(conf.id);
+    if (!el) continue;
+    if (conf.type === 'check') {
+      el.checked = false;
+    } else {
+      el.value = '';
+    }
+  }
+
   for (const [key, conf] of Object.entries(mapping)) {
     if (!(key in opts)) continue;
     const el = document.getElementById(conf.id);
@@ -4649,6 +4768,9 @@ function _restoreOptionsFromMeta(opts) {
       el.value = typeof val === 'object' ? JSON.stringify(val, null, 2) : (val ?? '');
     }
   }
+
+  if (_schemaEditorMode === 'table') _syncJsonToTable();
+  _updateFieldSchemaVisibility();
 }
 
 function _stableRequestValue(value) {
@@ -4686,6 +4808,10 @@ function renderBackgroundJobs() {
   const root = document.getElementById('backgroundJobs');
   if (!root) return;
   const jobs = [...backgroundJobs.values()].sort((left, right) => right.startedAt - left.startedAt);
+  const headerSpinner = document.getElementById('headerBackgroundSpinner');
+  if (headerSpinner) {
+    headerSpinner.hidden = !jobs.some(job => ['queued', 'running'].includes(job.status));
+  }
   root.replaceChildren();
 
   if (jobs.length === 0) {
@@ -4724,6 +4850,19 @@ function renderBackgroundJobs() {
 
     const actions = document.createElement('div');
     actions.className = 'background-job__actions';
+    if (['queued', 'running'].includes(job.status)) {
+      const activity = document.createElement('div');
+      activity.className = 'background-job__activity';
+      activity.setAttribute('role', 'status');
+      activity.setAttribute('aria-label', tr('jobs.processing'));
+      const spinner = document.createElement('span');
+      spinner.className = 'background-job__spinner';
+      spinner.setAttribute('aria-hidden', 'true');
+      const activityText = document.createElement('span');
+      activityText.textContent = tr('jobs.processing');
+      activity.append(spinner, activityText);
+      actions.appendChild(activity);
+    }
     if (job.status === 'succeeded' && job.result) {
       const openButton = document.createElement('button');
       openButton.type = 'button';
@@ -4819,7 +4958,12 @@ async function pollBackgroundJob(jobId) {
       job.error = data.job.error || '';
       renderBackgroundJobs();
 
-      if (job.status === 'failed') return;
+      if (job.status === 'failed') {
+        if (isBackgroundJobContextCurrent(job)) {
+          showAnalysisError(job.error || tr('error.jobFailedGeneric'));
+        }
+        return;
+      }
       if (job.status === 'succeeded') {
         const resultResponse = await fetch(`/api/jobs/${jobId}/result`);
         const resultData = await resultResponse.json();
@@ -4953,10 +5097,10 @@ async function analyze() {
     data = await res.json();
     renderRequestPayload(requestPayload);
     if (!res.ok) {
-      setStatus(tr('status.analyzeFailed'));
+      const detail = showAnalysisError(data.error || tr('error.analyzeFailedGeneric'));
       setBusy(false);
       document.getElementById('analyzeBtn').disabled = false;
-      alert(data.error || tr('error.analyzeFailedGeneric'));
+      alert(detail);
       return;
     }
 
@@ -4988,8 +5132,8 @@ async function analyze() {
     console.error('Analyze failed:', err);
     setBusy(false);
     document.getElementById('analyzeBtn').disabled = false;
-    setStatus(tr('status.analyzeFailed'));
-    alert(tr('error.analyzeFailedGeneric'));
+    const detail = showAnalysisError(err?.message || tr('error.analyzeFailedGeneric'));
+    alert(detail);
   } finally {
     if (!isBackground) setForegroundAnalysisLock(false);
   }
@@ -5064,10 +5208,10 @@ async function pollJob(jobId) {
     setStatus(tr('status.analyzingWithStatus', { status }));
 
     if (status === 'failed') {
-      setStatus(tr('status.failed'));
+      const detail = showAnalysisError(data.job.error || tr('error.jobFailedGeneric'), 'status.failed');
       setBusy(false);
       document.getElementById('analyzeBtn').disabled = false;
-      alert(data.job.error || tr('error.jobFailedGeneric'));
+      alert(detail);
       return;
     }
 
@@ -6880,14 +7024,64 @@ function updateCompareSelection() {
     key: cb.dataset.key,
     label: cb.dataset.label,
   }));
-  const btn = document.getElementById('compareBtn');
-  if (btn) btn.disabled = compareSelections.length < 2;
+  const compareBtn = document.getElementById('compareBtn');
+  if (compareBtn) compareBtn.disabled = compareSelections.length < 1;
+  const deleteBtn = document.getElementById('deleteSelectedCacheBtn');
+  if (deleteBtn) deleteBtn.disabled = compareSelections.length < 1;
 
-  // Hide comparison overlay when less than 2 selected
-  if (compareSelections.length < 2) {
+  // Hide comparison overlay when nothing is selected.
+  if (compareSelections.length < 1) {
     const overlay = document.getElementById('compareOverlay');
     if (overlay) overlay.hidden = true;
   }
+}
+
+/**
+ * Normalize stored response envelopes without changing the analysis payload.
+ * GA results currently come from the SDK as an unwrapped AnalysisResult, while
+ * the Preview REST adapter stores the operation envelope with a `result` field.
+ * Comparing either shape directly makes corresponding paths look added/removed.
+ */
+function normalizeResultForComparison(rawResult) {
+  if (!rawResult || typeof rawResult !== 'object' || Array.isArray(rawResult)) {
+    return rawResult;
+  }
+
+  const wrappedPayload = rawResult.result;
+  const hasResultEnvelope = wrappedPayload
+    && typeof wrappedPayload === 'object'
+    && !Array.isArray(wrappedPayload);
+  if (!hasResultEnvelope) return rawResult;
+
+  const normalized = {};
+  if (rawResult._meta !== undefined) normalized._meta = rawResult._meta;
+  if (rawResult._studio !== undefined) normalized._studio = rawResult._studio;
+
+  for (const [key, value] of Object.entries(wrappedPayload)) {
+    if (key === '_meta' || key === '_studio') continue;
+    normalized[key] = value;
+  }
+
+  const envelope = {};
+  for (const [key, value] of Object.entries(rawResult)) {
+    if (key === '_meta' || key === '_studio' || key === 'result') continue;
+    envelope[key] = value;
+  }
+  if (Object.keys(envelope).length > 0) normalized._envelope = envelope;
+
+  return normalized;
+}
+
+function comparisonResultShape(rawResult) {
+  const hasResultEnvelope = !!(
+    rawResult
+    && typeof rawResult === 'object'
+    && !Array.isArray(rawResult)
+    && rawResult.result
+    && typeof rawResult.result === 'object'
+    && !Array.isArray(rawResult.result)
+  );
+  return hasResultEnvelope ? 'result-envelope' : 'unwrapped-result';
 }
 
 /** Flatten a JSON object into a Map<string, any> using dot-path keys. */
@@ -7012,15 +7206,31 @@ function pathDepth(path) {
 }
 
 /** Render the comparison view */
-function renderCompareView(labels, results) {
+function renderCompareView(labels, results, resultShapes = []) {
   const overlay = document.getElementById('compareOverlay');
+  const titleEl = document.getElementById('compareTitle');
   const tabsEl = document.getElementById('compareResultTabs');
   const statsEl = document.getElementById('compareStats');
   const bodyEl = document.getElementById('compareBody');
+  const diffsBtn = document.getElementById('compareDiffsOnlyBtn');
   if (!overlay || !tabsEl || !bodyEl || !statsEl) return;
+
+  if (titleEl) {
+    const titleKey = results.length === 1 ? 'compare.titleSingle' : 'compare.title';
+    titleEl.dataset.i18n = titleKey;
+    titleEl.textContent = tr(titleKey);
+  }
+  if (diffsBtn) {
+    const singleResult = results.length === 1;
+    if (singleResult) compareDiffsOnly = false;
+    diffsBtn.disabled = singleResult;
+    diffsBtn.textContent = compareDiffsOnly ? tr('compare.showAll') : tr('compare.showOnlyDiffs');
+    diffsBtn.classList.toggle('btn--active', compareDiffsOnly);
+  }
 
   // Build tabs
   tabsEl.innerHTML = '';
+  const hasDifferentShapes = new Set(resultShapes).size >= 2;
   labels.forEach((lbl, i) => {
     const tab = document.createElement('div');
     tab.className = 'compare-tab';
@@ -7055,6 +7265,21 @@ function renderCompareView(labels, results) {
     headerRow.appendChild(colHeader);
   }
   table.appendChild(headerRow);
+
+  if (hasDifferentShapes) {
+    const boundaryRow = document.createElement('div');
+    boundaryRow.className = 'compare-row compare-row--structure-boundary';
+    const boundaryPath = document.createElement('div');
+    boundaryPath.className = 'compare-cell compare-cell--path compare-cell--structure-boundary';
+    boundaryPath.textContent = tr('compare.structureBoundary');
+    boundaryRow.appendChild(boundaryPath);
+    for (let i = 0; i < labels.length; i++) {
+      const spacer = document.createElement('div');
+      spacer.className = 'compare-cell compare-cell--structure-spacer';
+      boundaryRow.appendChild(spacer);
+    }
+    table.appendChild(boundaryRow);
+  }
 
   // Collapsible sections: track collapsed parent paths
   const collapsedPaths = new Set();
@@ -7164,8 +7389,56 @@ function renderCompareView(labels, results) {
   overlay.hidden = false;
 }
 
+async function deleteSelectedCaches() {
+  const targets = compareSelections.filter(selection => selection.fileHash && selection.key);
+  if (targets.length === 0) return;
+  if (!confirm(tr('library.deleteSelectedConfirm', { count: targets.length }))) return;
+
+  const deleteBtn = document.getElementById('deleteSelectedCacheBtn');
+  if (deleteBtn) deleteBtn.disabled = true;
+
+  let deletedCaches = 0;
+  const errors = [];
+
+  for (const target of targets) {
+    try {
+      const response = await fetch(`/api/library/${encodeURIComponent(target.fileHash)}/cache/${encodeURIComponent(target.key)}`, {
+        method: 'DELETE',
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error || `HTTP ${response.status}`);
+      }
+      deletedCaches += Number(data.deletedCaches) || 0;
+    } catch (error) {
+      errors.push(`${target.label}: ${error?.message || String(error)}`);
+    }
+  }
+
+  const overlay = document.getElementById('compareOverlay');
+  if (overlay) overlay.hidden = true;
+  compareSelections = [];
+
+  await loadLibrary();
+  await checkCacheExists();
+
+  if (errors.length > 0) {
+    const message = tr('library.deleteSelectedFailed', {
+      failed: errors.length,
+      total: targets.length,
+    });
+    setStatus(message);
+    alert(`${message}\n${errors.join('\n')}`);
+  } else {
+    setStatus(tr('library.deleteSelectedDone', {
+      count: deletedCaches,
+    }));
+  }
+}
+
 function initCompareMode() {
   const compareBtn = document.getElementById('compareBtn');
+  const deleteSelectedBtn = document.getElementById('deleteSelectedCacheBtn');
   const closeBtn = document.getElementById('compareCloseBtn');
   const expandBtn = document.getElementById('compareExpandAllBtn');
   const collapseBtn = document.getElementById('compareCollapseAllBtn');
@@ -7173,12 +7446,16 @@ function initCompareMode() {
 
   if (compareBtn) {
     compareBtn.addEventListener('click', async () => {
-      if (compareSelections.length < 2) {
-        alert(tr('compare.selectTwo'));
+      if (compareSelections.length < 1) {
+        alert(tr('compare.selectOne'));
         return;
       }
       await runComparison();
     });
+  }
+
+  if (deleteSelectedBtn) {
+    deleteSelectedBtn.addEventListener('click', deleteSelectedCaches);
   }
 
   if (closeBtn) {
@@ -7239,6 +7516,7 @@ async function runComparison() {
 
   const labels = [];
   const results = [];
+  const resultShapes = [];
 
   for (const sel of compareSelections) {
     try {
@@ -7246,19 +7524,20 @@ async function runComparison() {
       const data = await res.json();
       if (res.ok && data.result) {
         labels.push(sel.label);
-        results.push(data.result);
+        resultShapes.push(comparisonResultShape(data.result));
+        results.push(normalizeResultForComparison(data.result));
       }
     } catch (err) {
       console.error('Failed to load variant for comparison:', err);
     }
   }
 
-  if (results.length < 2) {
+  if (results.length < 1) {
     bodyEl.innerHTML = `<div class="hint">${tr('compare.noResults')}</div>`;
     return;
   }
 
-  renderCompareView(labels, results);
+  renderCompareView(labels, results, resultShapes);
 }
 
 // ═══════════════════════════════════════════════════════════

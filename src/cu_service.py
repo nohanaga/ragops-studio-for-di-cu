@@ -342,6 +342,16 @@ def _snake_to_camel(value: str) -> str:
     return head + "".join(part[:1].upper() + part[1:] for part in tail)
 
 
+def _normalize_preview_config_for_request(config: dict[str, Any]) -> dict[str, Any]:
+    """Convert service-resolved response values back to valid create selectors."""
+    normalized = dict(config)
+    workflow = normalized.get("workflow")
+    if isinstance(workflow, str) and "." in workflow:
+        family = workflow.split(".", 1)[0].lower()
+        normalized["workflow"] = "agentic" if family == "agentic" else "default"
+    return normalized
+
+
 def _get_preview_root_and_config(
     analyzer_id: str,
 ) -> tuple[str, dict[str, Any], dict[str, str]]:
@@ -352,10 +362,11 @@ def _get_preview_root_and_config(
     adapter = CuPreviewAdapter()
     analyzer = adapter.get_analyzer(analyzer_id)
     config = analyzer.get("config")
-    config_dict = dict(config) if isinstance(config, dict) else {}
+    response_config = dict(config) if isinstance(config, dict) else {}
+    config_dict = _normalize_preview_config_for_request(response_config)
     models = analyzer.get("models")
     models_dict = dict(models) if isinstance(models, dict) else {}
-    workflow = config_dict.get("workflow")
+    workflow = response_config.get("workflow")
     if isinstance(workflow, str):
         _resolved_workflow_cache[cache_key] = workflow
 

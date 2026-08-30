@@ -7,6 +7,7 @@ import re
 import secrets
 import threading
 import uuid
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -35,6 +36,60 @@ RESULTS_DIR = STORAGE_DIR / "results"
 CACHE_DIR = STORAGE_DIR / "cache"
 USERTAB_DIR = APP_ROOT / "usertab"
 logger = logging.getLogger(__name__)
+
+
+def _format_analysis_error(exc: Exception) -> str:
+    """Return useful Azure service error details without exposing request headers."""
+    payload: Any = None
+    response = getattr(exc, "response", None)
+    if response is not None:
+        try:
+            payload = response.json()
+        except Exception:  # noqa: BLE001 - error responses are not always JSON
+            payload = None
+
+    if payload is None:
+        service_error = getattr(exc, "error", None)
+        if service_error is not None:
+            if hasattr(service_error, "as_dict"):
+                try:
+                    payload = service_error.as_dict()
+                except Exception:  # noqa: BLE001
+                    payload = None
+            elif isinstance(service_error, Mapping):
+                payload = service_error
+
+    details: list[str] = []
+
+    def collect(value: Any) -> None:
+        if not isinstance(value, Mapping):
+            return
+        code = value.get("code")
+        message = value.get("message")
+        target = value.get("target")
+        if message:
+            line = str(message).strip()
+            if code:
+                line = f"[{code}] {line}"
+            if target:
+                line = f"{line} (target: {target})"
+            if line and line not in details:
+                details.append(line)
+        for key in ("details", "innererror", "innerError"):
+            nested = value.get(key)
+            if isinstance(nested, list):
+                for item in nested:
+                    collect(item)
+            else:
+                collect(nested)
+
+    if isinstance(payload, Mapping):
+        collect(payload.get("error", payload))
+
+    fallback = str(exc).strip() or exc.__class__.__name__
+    if not details:
+        details.append(fallback)
+    return "\n".join(details)[:8000]
 
 
 class AnalysisJobExecutor:
@@ -309,6 +364,14 @@ def create_app() -> Flask:
             return jsonify({"error": "cached result not found"}), 404
         return jsonify({"result": result})
 
+    @app.delete("/api/library/<file_hash>/cache/<encoded_key>")
+    def delete_cached_result(file_hash: str, encoded_key: str):
+        """Delete only the selected cached result, preserving the source file."""
+        deleted = cache.delete_by_key(file_hash=file_hash, encoded_key=encoded_key)
+        if not deleted:
+            return jsonify({"error": "cached result not found"}), 404
+        return jsonify({"deletedCaches": 1})
+
     @app.post("/api/documents")
     def upload_document():
         if not UPLOADS_ENABLED:
@@ -412,7 +475,8 @@ def create_app() -> Flask:
                     cache.save(file_hash=doc.file_hash, model_id=cache_model_id, result=result_dict, options=options)
                 job_store.set_succeeded(job_id=job_id, result=result_dict)
             except Exception as ex:  # noqa: BLE001 (sample app)
-                job_store.set_failed(job_id=job_id, error=str(ex))
+                logger.exception("Document Intelligence analysis failed (job_id=%s)", job_id)
+                job_store.set_failed(job_id=job_id, error=_format_analysis_error(ex))
 
         if not analysis_executor.submit(_run_job):
             job_store.set_failed(job_id=job_id, error="Analysis queue is full")
@@ -525,7 +589,8 @@ def create_app() -> Flask:
                     cache.save(file_hash=doc.file_hash, model_id=cache_model_id, result=result_dict, options=options)
                 job_store.set_succeeded(job_id=job_id, result=result_dict)
             except Exception as ex:  # noqa: BLE001
-                job_store.set_failed(job_id=job_id, error=str(ex))
+                logger.exception("Content Understanding analysis failed (job_id=%s)", job_id)
+                job_store.set_failed(job_id=job_id, error=_format_analysis_error(ex))
 
         if cu_request.execution_mode == "sync":
             _run_cu_job()

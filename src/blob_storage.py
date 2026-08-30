@@ -489,6 +489,20 @@ class BlobResultCache:
         except Exception:
             return None
 
+    def delete_by_key(self, *, file_hash: str, encoded_key: str) -> bool:
+        """Delete one cached result blob without deleting its source document or siblings."""
+        from azure.core.exceptions import ResourceNotFoundError
+
+        safe_hash = re.sub(r"[^a-fA-F0-9]", "", file_hash)[:64] or "unknown"
+        if not re.fullmatch(r"[A-Za-z0-9_-]+", encoded_key):
+            return False
+        blob_name = f"{self._PREFIX}{safe_hash}/{encoded_key}.json"
+        try:
+            self._container.delete_blob(blob_name)
+            return True
+        except ResourceNotFoundError:
+            return False
+
     def cache_count(self, *, file_hash: str) -> int:
         safe_hash = re.sub(r"[^a-fA-F0-9]", "", file_hash)[:64] or "unknown"
         prefix = f"{self._PREFIX}{safe_hash}/"

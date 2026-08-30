@@ -20,7 +20,10 @@
     <header class="header">
       <div class="header__title" id="appHeaderTitle">RAGOps Studio</div>
       <div class="header__right">
-        <div class="header__status" id="statusText" data-i18n="status.ready">Ready</div>
+        <div class="header__statusWrap">
+          <span class="header__spinner" id="headerBackgroundSpinner" aria-hidden="true" hidden></span>
+          <div class="header__status" id="statusText" data-i18n="status.ready">Ready</div>
+        </div>
 
         <div class="menu" id="langMenu">
           <button id="langMenuBtn" class="btn btn--small btn--ghost" type="button" aria-haspopup="menu" aria-expanded="false">
@@ -367,6 +370,7 @@
           <div class="library__actions">
             <button id="refreshLibraryBtn" class="btn btn--small" type="button" data-i18n="library.refresh">/app/storage から再読み込み</button>
             <button id="compareBtn" class="btn btn--small btn--accent" type="button" disabled data-i18n="compare.button">比較</button>
+            <button id="deleteSelectedCacheBtn" class="btn btn--small btn--danger" type="button" disabled data-i18n="library.deleteSelected">選択したキャッシュを削除</button>
           </div>
           <div class="library" id="libraryList">
             <div class="hint">-</div>
@@ -495,7 +499,7 @@
         <!-- Comparison mode overlay -->
         <div class="compare-overlay" id="compareOverlay" hidden>
           <div class="compare-overlay__header">
-            <h2 class="compare-overlay__title" data-i18n="compare.title">結果比較（セマンティック Diff）</h2>
+            <h2 class="compare-overlay__title" id="compareTitle" data-i18n="compare.title">結果比較（セマンティック Diff）</h2>
             <div class="compare-overlay__actions">
               <button class="btn btn--small" type="button" id="compareExpandAllBtn" data-i18n="compare.expandAll">すべて展開</button>
               <button class="btn btn--small" type="button" id="compareCollapseAllBtn" data-i18n="compare.collapseAll">すべて折りたたむ</button>

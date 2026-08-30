@@ -146,6 +146,21 @@ class ResultCache:
         with path.open("r", encoding="utf-8") as f:
             return json.load(f)
 
+    def delete_by_key(self, *, file_hash: str, encoded_key: str) -> bool:
+        """Delete one cached result without deleting its source document or siblings."""
+        safe_hash = re.sub(r"[^a-fA-F0-9]", "", file_hash)[:64] or "unknown"
+        if not re.fullmatch(r"[A-Za-z0-9_-]+", encoded_key):
+            return False
+        path = self._cache_dir / safe_hash / f"{encoded_key}.json"
+        if not path.exists() or not path.is_file():
+            return False
+        path.unlink()
+        try:
+            path.parent.rmdir()
+        except OSError:
+            pass
+        return True
+
     def cache_count(self, *, file_hash: str) -> int:
         """Return total number of cached result files for the given file hash."""
         safe_hash = re.sub(r"[^a-fA-F0-9]", "", file_hash)[:64] or "unknown"
