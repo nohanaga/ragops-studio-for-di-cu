@@ -291,6 +291,11 @@ def create_app() -> Flask:
             # When multiple docs share the same hash, prefer the most recently modified
             docs_sorted = sorted(docs, key=lambda d: d.path.stat().st_mtime if (d.path and d.path.exists()) else 0, reverse=True)
             doc = docs_sorted[0]
+            cached_variants = cache.list_variants(file_hash=fh)
+            latest_saved_at = max(
+                (variant.get("savedAt", "") for variant in cached_variants),
+                default="",
+            )
             items.append(
                 {
                     "document": {
@@ -301,12 +306,15 @@ def create_app() -> Flask:
                         "fileHash": doc.file_hash,
                         "url": f"/files/{doc.document_id}",
                     },
-                    "cachedModels": cache.list_model_ids(file_hash=fh),
-                    "cachedVariants": cache.list_variants(file_hash=fh),
+                    "cachedModels": [variant["label"] for variant in cached_variants],
+                    "cachedVariants": cached_variants,
+                    "latestSavedAt": latest_saved_at,
                 }
             )
-        # Sort by name for easier selection
+        # Keep deterministic name order for ties, then put the file containing
+        # the newest cached result first.
         items.sort(key=lambda x: (x.get("document", {}).get("filename") or "").lower())
+        items.sort(key=lambda x: x.get("latestSavedAt", ""), reverse=True)
         return items
 
     @app.post("/api/cache/exists")

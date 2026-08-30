@@ -475,7 +475,8 @@ class BlobResultCache:
                 "savedAt": saved_at,
                 "optionKeys": option_keys,
             })
-        out.sort(key=lambda v: v["label"])
+        out.sort(key=lambda v: v.get("label", "").lower())
+        out.sort(key=lambda v: v.get("savedAt", ""), reverse=True)
         return out
 
     def load_by_key(self, *, file_hash: str, encoded_key: str) -> dict[str, Any] | None:

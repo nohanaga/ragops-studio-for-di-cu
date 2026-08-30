@@ -55,7 +55,12 @@
       <section class="pane pane--left" id="main-pane-input" data-main-pane="input" role="tabpanel" aria-label="Input / Model" data-i18n-aria-label="pane.input.aria">
         <div class="pane__header">
           <h2 class="pane__title" data-i18n="pane.input.title">入力 / モデル</h2>
-          <button id="analyzeBtn" class="btn btn--primary" type="button" disabled data-i18n="action.analyze">Analyze</button>
+          <button id="analyzeBtn" class="btn btn--primary btn--iconText" type="button" disabled>
+            <svg class="btn__icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
+              <path d="M4 4h11v16H4zM8 8h4m-4 4h4m-4 4h3m6-8 3 3-6 6-3 1 1-3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span data-i18n="action.analyze">Analyze</span>
+          </button>
         </div>
 
         <div class="service-selector" id="serviceSelector">
@@ -81,7 +86,12 @@
                   <div class="upload-dropzone__hint" data-i18n="dropzone.hint">PDF / 画像を選択してください</div>
                 </div>
               </div>
-              <button id="uploadBtn" class="btn" type="button" {% if not uploads_enabled %}disabled{% endif %} data-i18n="action.upload">Upload</button>
+              <button id="uploadBtn" class="btn btn--iconText" type="button" {% if not uploads_enabled %}disabled{% endif %}>
+                <svg class="btn__icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
+                  <path id="uploadBtnIconPath" d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v5h14v-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <span id="uploadBtnLabel" data-i18n="action.upload">Upload</span>
+              </button>
             </div>
             <div class="hint" id="fileInfo"></div>
           </div>
@@ -369,8 +379,17 @@
           <div class="hint" data-i18n="library.hint">サーバが保持しているキャッシュからロードします</div>
           <div class="library__actions">
             <button id="refreshLibraryBtn" class="btn btn--small" type="button" data-i18n="library.refresh">/app/storage から再読み込み</button>
-            <button id="compareBtn" class="btn btn--small btn--accent" type="button" disabled data-i18n="compare.button">比較</button>
-            <button id="deleteSelectedCacheBtn" class="btn btn--small btn--danger" type="button" disabled data-i18n="library.deleteSelected">選択したキャッシュを削除</button>
+            <button id="compareBtn" class="btn btn--small btn--accent btn--iconText" type="button" disabled>
+              <svg class="btn__icon" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false">
+                <path d="M8 4 4 8l4 4M4 8h12m0 4 4 4-4 4m4-4H8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <span data-i18n="compare.button">比較</span>
+            </button>
+            <button id="deleteSelectedCacheBtn" class="library__deleteSelectedBtn" type="button" disabled data-i18n-title="library.deleteSelected" data-i18n-aria-label="library.deleteSelected" title="選択したキャッシュを削除" aria-label="選択したキャッシュを削除">
+              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
+                <path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 4v5m4-5v5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
           </div>
           <div class="library" id="libraryList">
             <div class="hint">-</div>

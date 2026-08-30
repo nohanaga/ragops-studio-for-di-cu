@@ -1673,8 +1673,18 @@ function syncUploadButtonMode() {
   }
 
   uploadActionMode = mode;
-  uploadBtn.dataset.i18n = mode === 'analyze' ? 'action.analyze' : 'action.upload';
-  uploadBtn.textContent = tr(uploadBtn.dataset.i18n);
+  const labelKey = mode === 'analyze' ? 'action.analyze' : 'action.upload';
+  const label = document.getElementById('uploadBtnLabel');
+  if (label) {
+    label.dataset.i18n = labelKey;
+    label.textContent = tr(labelKey);
+  }
+  const iconPath = document.getElementById('uploadBtnIconPath');
+  if (iconPath) {
+    iconPath.setAttribute('d', mode === 'analyze'
+      ? 'M4 4h11v16H4zM8 8h4m-4 4h4m-4 4h3m6-8 3 3-6 6-3 1 1-3z'
+      : 'M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v5h14v-5');
+  }
   uploadBtn.classList.toggle('btn--primary', mode === 'analyze');
 }
 
@@ -1815,19 +1825,44 @@ function hideTooltip() {
   tooltipPinned = false;
 }
 
-function showTooltip(text, clientX, clientY) {
+function showTooltip(text, clientX, clientY, anchorEl = null) {
   const t = document.getElementById('bboxTooltip');
   const preview = document.getElementById('preview');
   if (!t || !preview) return;
 
   t.textContent = (text || '').toString();
-  const rect = preview.getBoundingClientRect();
-  const x = Math.max(8, Math.min(clientX - rect.left + 12, rect.width - 16));
-  const y = Math.max(8, Math.min(clientY - rect.top + 12, rect.height - 16));
-  t.style.left = `${x}px`;
-  t.style.top = `${y}px`;
   t.classList.add('tooltip--show');
   t.setAttribute('aria-hidden', 'false');
+
+  const previewRect = preview.getBoundingClientRect();
+  const anchorRect = anchorEl?.getBoundingClientRect?.();
+  const anchorX = anchorRect
+    ? anchorRect.left + anchorRect.width / 2
+    : clientX;
+  const anchorTop = anchorRect ? anchorRect.top : clientY;
+  const anchorBottom = anchorRect ? anchorRect.bottom : clientY;
+  const gap = 8;
+  const edge = 8;
+  const tooltipWidth = t.offsetWidth;
+  const tooltipHeight = t.offsetHeight;
+
+  let viewportX = anchorX - tooltipWidth / 2;
+  viewportX = Math.max(
+    previewRect.left + edge,
+    Math.min(viewportX, previewRect.right - tooltipWidth - edge),
+  );
+
+  let viewportY = anchorTop - tooltipHeight - gap;
+  if (viewportY < previewRect.top + edge) viewportY = anchorBottom + gap;
+  viewportY = Math.max(
+    previewRect.top + edge,
+    Math.min(viewportY, previewRect.bottom - tooltipHeight - edge),
+  );
+
+  // Tooltip is absolutely positioned in preview's padding box. Include the
+  // scroll offset because client coordinates refer to the visible viewport.
+  t.style.left = `${viewportX - previewRect.left + preview.scrollLeft}px`;
+  t.style.top = `${viewportY - previewRect.top + preview.scrollTop}px`;
   tooltipPinned = true;
 }
 
@@ -2119,10 +2154,7 @@ function attachTooltipHandlers(el, text) {
   const safeText = (text || '').toString().trim();
   if (!safeText) return;
   el.addEventListener('mouseenter', (e) => {
-    showTooltip(safeText, e.clientX, e.clientY);
-  });
-  el.addEventListener('mousemove', (e) => {
-    showTooltip(safeText, e.clientX, e.clientY);
+    showTooltip(safeText, e.clientX, e.clientY, el);
   });
   el.addEventListener('mouseleave', () => {
     // In responsive (tab) mode, keep tooltip shown after tap
@@ -2135,7 +2167,7 @@ function attachTooltipHandlers(el, text) {
     if (!isResponsiveTabMode()) return;
     e.preventDefault();
     e.stopPropagation();
-    showTooltip(safeText, e.clientX, e.clientY);
+    showTooltip(safeText, e.clientX, e.clientY, el);
   });
 }
 
@@ -2357,7 +2389,7 @@ function drawOverlayForPage(pageNumber) {
         // In responsive (tab) mode, keep tooltip after tap
         if (isResponsiveTabMode()) {
           const safeText = (tooltipText || '').toString().trim();
-          if (safeText) showTooltip(safeText, e.clientX, e.clientY);
+          if (safeText) showTooltip(safeText, e.clientX, e.clientY, path);
         } else {
           hideTooltip();
         }
@@ -4317,8 +4349,10 @@ async function loadModels({ preserveSelection = false } = {}) {
 
   // Preserve the current model across API profile changes when supported.
   const previous = _pickerModels.find((model) => model.id === previousModelId);
-  const first = _pickerModels.find((m) => !m.us) || _pickerModels[0];
-  const selected = previous || first;
+  const defaultModel = _pickerModels.find((model) => model.id === 'prebuilt-layout')
+    || _pickerModels.find((model) => !model.us)
+    || _pickerModels[0];
+  const selected = previous || defaultModel;
   if (selected) {
     _pickerSelected = selected.id;
     select.value = selected.id;
