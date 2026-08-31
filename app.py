@@ -331,7 +331,7 @@ def create_app() -> Flask:
         body = request.get_json(silent=True) or {}
         file_hash = body.get("fileHash")
         if not file_hash:
-            return jsonify({"error": "fileHash and modelId are required"}), 400
+            return jsonify({"error": "fileHash is required"}), 400
 
         if body.get("service") == "cu":
             try:
