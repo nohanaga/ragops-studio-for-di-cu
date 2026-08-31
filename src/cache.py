@@ -81,11 +81,18 @@ class ResultCache:
             mid = _decode_model_id(encoded_key)
             if not mid:
                 continue
-            # Determine service prefix and strip internal version tags
-            # CU cache keys: "cu:v8:analyzerName" or "cu:v8:analyzerName__sig"
+            # Determine service prefix and strip internal version tags.
             if mid.startswith("cu:"):
-                core = re.sub(r"^cu:(?:v\d+:)?", "", mid)
-                svc = "CU"
+                v9_match = re.match(
+                    r"^cu:v9:(ga|preview):([^:]+):(async|sync):(.+)$",
+                    mid,
+                )
+                if v9_match:
+                    profile, _api_version, mode, core = v9_match.groups()
+                    svc = f"CU {profile.upper()}/{mode}"
+                else:
+                    core = re.sub(r"^cu:(?:v\d+:)?", "", mid)
+                    svc = "CU legacy"
             else:
                 core = mid
                 svc = "DI"
@@ -124,7 +131,8 @@ class ResultCache:
                 "savedAt": saved_at,
                 "optionKeys": option_keys,
             })
-        out.sort(key=lambda v: v["label"])
+        out.sort(key=lambda v: v.get("label", "").lower())
+        out.sort(key=lambda v: v.get("savedAt", ""), reverse=True)
         return out
 
     def load_by_key(self, *, file_hash: str, encoded_key: str) -> dict[str, Any] | None:
@@ -138,6 +146,21 @@ class ResultCache:
             return None
         with path.open("r", encoding="utf-8") as f:
             return json.load(f)
+
+    def delete_by_key(self, *, file_hash: str, encoded_key: str) -> bool:
+        """Delete one cached result without deleting its source document or siblings."""
+        safe_hash = re.sub(r"[^a-fA-F0-9]", "", file_hash)[:64] or "unknown"
+        if not re.fullmatch(r"[A-Za-z0-9_-]+", encoded_key):
+            return False
+        path = self._cache_dir / safe_hash / f"{encoded_key}.json"
+        if not path.exists() or not path.is_file():
+            return False
+        path.unlink()
+        try:
+            path.parent.rmdir()
+        except OSError:
+            pass
+        return True
 
     def cache_count(self, *, file_hash: str) -> int:
         """Return total number of cached result files for the given file hash."""

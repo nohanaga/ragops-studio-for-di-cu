@@ -270,3 +270,85 @@
   opacity: 0.5;
   text-align: right;
 }
+
+/* Modern Studio alignment: layout-only refinements for injected user tabs. */
+.ut-content {
+  padding: 2px;
+}
+
+.ut-header {
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface2);
+}
+
+.ut-header__title {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.ut-cards {
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.ut-card {
+  min-height: 86px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--surface2);
+}
+
+.ut-section {
+  margin-bottom: 18px;
+}
+
+.ut-section__title {
+  margin-bottom: 10px;
+  padding-bottom: 7px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.ut-table {
+  border: 1px solid var(--border);
+  border-spacing: 0;
+  border-collapse: separate;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.ut-table th,
+.ut-table td {
+  padding: 9px 10px;
+  border-width: 0 1px 1px 0;
+}
+
+.ut-table th:last-child,
+.ut-table td:last-child {
+  border-right: 0;
+}
+
+.ut-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.ut-list-item {
+  margin-bottom: 8px;
+  padding: 11px 12px;
+  border-radius: 10px;
+  background: var(--surface2);
+}
+
+.ut-context,
+.ut-clause {
+  border-radius: 8px;
+}

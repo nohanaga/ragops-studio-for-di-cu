@@ -10,6 +10,7 @@
   <script nonce="{{ csp_nonce }}">
     window.__APP_CONFIG__ = {
       uploadsEnabled: {{ 'true' if uploads_enabled else 'false' }},
+      userTabsEnabled: {{ 'true' if user_tabs_enabled else 'false' }},
       defaultLang: "{{ default_lang }}",
       cuEnabled: {{ 'true' if cu_enabled else 'false' }}
     };
@@ -20,7 +21,10 @@
     <header class="header">
       <div class="header__title" id="appHeaderTitle">RAGOps Studio</div>
       <div class="header__right">
-        <div class="header__status" id="statusText" data-i18n="status.ready">Ready</div>
+        <div class="header__statusWrap">
+          <span class="header__spinner" id="headerBackgroundSpinner" aria-hidden="true" hidden></span>
+          <div class="header__status" id="statusText" data-i18n="status.ready">Ready</div>
+        </div>
 
         <div class="menu" id="langMenu">
           <button id="langMenuBtn" class="btn btn--small btn--ghost" type="button" aria-haspopup="menu" aria-expanded="false">
@@ -52,7 +56,12 @@
       <section class="pane pane--left" id="main-pane-input" data-main-pane="input" role="tabpanel" aria-label="Input / Model" data-i18n-aria-label="pane.input.aria">
         <div class="pane__header">
           <h2 class="pane__title" data-i18n="pane.input.title">入力 / モデル</h2>
-          <button id="analyzeBtn" class="btn btn--primary" type="button" disabled data-i18n="action.analyze">Analyze</button>
+          <button id="analyzeBtn" class="btn btn--primary btn--iconText" type="button" disabled>
+            <svg class="btn__icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
+              <path d="M4 4h11v16H4zM8 8h4m-4 4h4m-4 4h3m6-8 3 3-6 6-3 1 1-3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span data-i18n="action.analyze">Analyze</span>
+          </button>
         </div>
 
         <div class="service-selector" id="serviceSelector">
@@ -78,7 +87,12 @@
                   <div class="upload-dropzone__hint" data-i18n="dropzone.hint">PDF / 画像を選択してください</div>
                 </div>
               </div>
-              <button id="uploadBtn" class="btn" type="button" {% if not uploads_enabled %}disabled{% endif %} data-i18n="action.upload">Upload</button>
+              <button id="uploadBtn" class="btn btn--iconText" type="button" {% if not uploads_enabled %}disabled{% endif %}>
+                <svg class="btn__icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
+                  <path id="uploadBtnIconPath" d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v5h14v-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <span id="uploadBtnLabel" data-i18n="action.upload">Upload</span>
+              </button>
             </div>
             <div class="hint" id="fileInfo"></div>
           </div>
@@ -140,6 +154,18 @@
             <div class="cu-options__section">
               <div class="cu-options__sectionTitle" data-i18n="field.cuRequestOptions">実行オプション</div>
               <div class="option-grid">
+                <label class="option-grid__row"><span data-i18n="field.cuApiProfile">API プロファイル</span>
+                  <select id="cuApiProfile" class="select">
+                    <option value="ga" data-i18n="cu.profile.ga">GA (2025-11-01)</option>
+                    <option value="preview" data-i18n="cu.profile.preview">Preview (2026-06-01-preview)</option>
+                  </select>
+                </label>
+                <label class="option-grid__row"><span data-i18n="field.cuExecutionMode">実行方式</span>
+                  <select id="cuExecutionMode" class="select">
+                    <option value="async" data-i18n="cu.execution.async">非同期</option>
+                    <option value="sync" data-i18n="cu.execution.sync">同期</option>
+                  </select>
+                </label>
                 <label class="option-grid__row"><span class="fieldLabelWithTooltip"><span data-i18n="field.contentRange">解析範囲</span><span class="infoTooltip" tabindex="0" data-i18n-title="tooltip.cuContentRange" data-i18n-aria-label="tooltip.cuContentRange">&#9432;</span></span> <input id="optCuContentRange" class="input" placeholder="例: 1-3,5 または 0-30000" data-i18n-placeholder="field.contentRange.placeholder" /></label>
                 <label class="option-grid__row"><span class="fieldLabelWithTooltip"><span data-i18n="field.processingLocation">処理ロケーション</span><span class="infoTooltip" tabindex="0" data-i18n-title="tooltip.cuProcessingLocation" data-i18n-aria-label="tooltip.cuProcessingLocation">&#9432;</span></span>
                   <select id="optCuProcessingLocation" class="select">
@@ -150,6 +176,7 @@
                   </select>
                 </label>
               </div>
+              <div id="cuPreviewNotice" class="hint cu-preview-notice" data-i18n="cu.preview.notice" hidden>Preview は一般提供前であり、SLA はありません。</div>
             </div>
 
             <div class="cu-options__section">
@@ -174,6 +201,13 @@
                     <option value="" data-i18n="field.cuBoolean.default">(service 既定)</option>
                     <option value="true" data-i18n="field.cuBoolean.true">有効 (true)</option>
                     <option value="false" data-i18n="field.cuBoolean.false">無効 (false)</option>
+                  </select>
+                </label>
+                <label class="option-grid__row" id="cuWorkflowRow"><span class="fieldLabelWithTooltip"><span data-i18n="field.cuWorkflow">Workflow</span><span class="infoTooltip" tabindex="0" data-i18n-title="tooltip.cuWorkflow" data-i18n-aria-label="tooltip.cuWorkflow">&#9432;</span></span>
+                  <select id="optCuWorkflow" class="select">
+                    <option value="" data-i18n="common.defaultOption">(既定)</option>
+                    <option value="default">default</option>
+                    <option value="agentic">agentic</option>
                   </select>
                 </label>
               </div>
@@ -278,6 +312,13 @@
                     <option value="false" data-i18n="field.cuBoolean.false">無効 (false)</option>
                   </select>
                 </label>
+                <label class="option-grid__row" id="cuAllowInPageSegmentsRow"><span class="fieldLabelWithTooltip"><span data-i18n="field.cuAllowInPageSegments">ページ内分割</span><span class="infoTooltip" tabindex="0" data-i18n-title="tooltip.cuAllowInPageSegments" data-i18n-aria-label="tooltip.cuAllowInPageSegments">&#9432;</span></span>
+                  <select id="optCuAllowInPageSegments" class="select">
+                    <option value="" data-i18n="field.cuBoolean.default">(service 既定)</option>
+                    <option value="true" data-i18n="field.cuBoolean.true">有効 (true)</option>
+                    <option value="false" data-i18n="field.cuBoolean.false">無効 (false)</option>
+                  </select>
+                </label>
               </div>
               <label class="option-grid__row cu-options__row--wide">
                 <span class="fieldLabelWithTooltip"><span data-i18n="field.cuContentCategories">Content categories (JSON)</span><span class="infoTooltip" tabindex="0" data-i18n-title="tooltip.cuContentCategories" data-i18n-aria-label="tooltip.cuContentCategories">&#9432;</span></span>
@@ -325,6 +366,9 @@
           <div class="field">
             <label class="field__label" data-i18n="field.job">ジョブ</label>
             <div class="mono" id="jobInfo">-</div>
+            <div class="background-jobs" id="backgroundJobs" aria-live="polite">
+              <div class="hint" data-i18n="jobs.none">バックグラウンドジョブはありません</div>
+            </div>
           </div>
         </div>
 
@@ -336,7 +380,17 @@
           <div class="hint" data-i18n="library.hint">サーバが保持しているキャッシュからロードします</div>
           <div class="library__actions">
             <button id="refreshLibraryBtn" class="btn btn--small" type="button" data-i18n="library.refresh">/app/storage から再読み込み</button>
-            <button id="compareBtn" class="btn btn--small btn--accent" type="button" disabled data-i18n="compare.button">比較</button>
+            <button id="compareBtn" class="btn btn--small btn--accent btn--iconText" type="button" disabled>
+              <svg class="btn__icon" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false">
+                <path d="M8 4 4 8l4 4M4 8h12m0 4 4 4-4 4m4-4H8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <span data-i18n="compare.button">比較</span>
+            </button>
+            <button id="deleteSelectedCacheBtn" class="library__deleteSelectedBtn" type="button" disabled data-i18n-title="library.deleteSelected" data-i18n-aria-label="library.deleteSelected" title="選択したキャッシュを削除" aria-label="選択したキャッシュを削除">
+              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
+                <path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 4v5m4-5v5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
           </div>
           <div class="library" id="libraryList">
             <div class="hint">-</div>
@@ -379,11 +433,14 @@
                 <option value="tables" data-i18n="overlay.tables">Tables</option>
                 <option value="keyValuePairs" data-i18n="overlay.keyValuePairs">KeyValuePairs</option>
                 <option value="selectionMarks" data-i18n="overlay.selectionMarks">SelectionMarks</option>
+                <option value="signatures" data-i18n="overlay.signatures">署名</option>
+                <option value="segments" data-i18n="overlay.segments">セグメント</option>
+                <option value="evidence" data-i18n="overlay.evidence">選択した根拠</option>
               </select>
             </div>
           </div>
           <div id="preview" class="preview">
-            <div class="hint" data-i18n="preview.hint">アップロード後に表示します（PDFはPDF.js描画＋BBoxオーバーレイ）</div>
+            <div class="hint" data-i18n="preview.hint">アップロード後に表示します</div>
             <div id="busyOverlay" class="busy" aria-hidden="true">
               <div class="busy__card">
                 <div class="busy__spinner" aria-hidden="true"></div>
@@ -462,7 +519,7 @@
         <!-- Comparison mode overlay -->
         <div class="compare-overlay" id="compareOverlay" hidden>
           <div class="compare-overlay__header">
-            <h2 class="compare-overlay__title" data-i18n="compare.title">結果比較（セマンティック Diff）</h2>
+            <h2 class="compare-overlay__title" id="compareTitle" data-i18n="compare.title">結果比較（セマンティック Diff）</h2>
             <div class="compare-overlay__actions">
               <button class="btn btn--small" type="button" id="compareExpandAllBtn" data-i18n="compare.expandAll">すべて展開</button>
               <button class="btn btn--small" type="button" id="compareCollapseAllBtn" data-i18n="compare.collapseAll">すべて折りたたむ</button>
@@ -488,6 +545,11 @@
           <button class="tab" data-tab="json" data-i18n="results.tabs.json">Response JSON</button>
           <button class="tab" data-tab="requestJson" data-i18n="results.tabs.requestJson">Request JSON</button>
         </div>
+
+        <nav class="user-tabs" id="userTabsNav" aria-label="User tabs" data-i18n-aria-label="results.userTabs" hidden>
+          <span class="user-tabs__label" data-i18n="results.userTabs">ユーザータブ</span>
+          <div class="user-tabs__list" id="userTabs" role="tablist"></div>
+        </nav>
 
         <div class="tabpane tabpane--active" id="tab-summary">
           <pre class="pre" id="summaryText">-</pre>

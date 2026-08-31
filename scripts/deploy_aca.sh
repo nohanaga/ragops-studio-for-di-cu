@@ -18,6 +18,7 @@ IMAGE_TAG=""
 IDENTITY_NAME="id-ragops-studio"
 LOG_ANALYTICS_WORKSPACE_NAME="law-ragops-studio"
 UPLOADS_ENABLED="true"
+USER_TABS_ENABLED="false"
 
 # Storage
 STORAGE_ACCOUNT_NAME=""
@@ -89,6 +90,7 @@ Authentication:
 
 App settings:
   --uploads-enabled true|false Enable file uploads (default: true)
+    --user-tabs-enabled true|false Show user tabs (default: false)
 
   -h, --help                  Show this help
 EOF
@@ -109,6 +111,7 @@ while [[ $# -gt 0 ]]; do
         --image-repo)           IMAGE_REPO="$2"; shift 2 ;;
         --image-tag)            IMAGE_TAG="$2"; shift 2 ;;
         --uploads-enabled)      UPLOADS_ENABLED="$2"; shift 2 ;;
+        --user-tabs-enabled)    USER_TABS_ENABLED="$2"; shift 2 ;;
         --storage-mode)         STORAGE_MODE="$2"; shift 2 ;;
         --storage-account)      STORAGE_ACCOUNT_NAME="$2"; shift 2 ;;
         --storage-share)        STORAGE_SHARE_NAME="$2"; shift 2 ;;
@@ -261,6 +264,7 @@ az extension add --name containerapp --upgrade --yes 2>/dev/null || true
 
 IMAGE_TAG=$(get_default_image_tag)
 UPLOADS_ENV_VALUE="$UPLOADS_ENABLED"
+USER_TABS_ENV_VALUE="$USER_TABS_ENABLED"
 
 # Resolve resource groups
 [[ -z "$DI_RESOURCE_GROUP_NAME" ]] && DI_RESOURCE_GROUP_NAME="$RESOURCE_GROUP_NAME"
@@ -442,7 +446,7 @@ if [[ "$APP_EXISTS" == "false" ]]; then
     fi
 
     # Build env vars list
-    ENV_VARS=("UPLOADS_ENABLED=${UPLOADS_ENV_VALUE}")
+    ENV_VARS=("UPLOADS_ENABLED=${UPLOADS_ENV_VALUE}" "USER_TABS_ENABLED=${USER_TABS_ENV_VALUE}")
     if $DI_CONFIGURED; then
         if [[ "$DI_AUTH_MODE" == "identity" ]]; then
             ENV_VARS+=("DI_ENDPOINT=${DI_S_ENDPOINT}" "DI_AUTH_MODE=identity")
@@ -545,7 +549,7 @@ else
     fi
 
     # ── Build env vars ────────────────────────────────────────
-    SET_ENV_VARS=("UPLOADS_ENABLED=${UPLOADS_ENV_VALUE}")
+    SET_ENV_VARS=("UPLOADS_ENABLED=${UPLOADS_ENV_VALUE}" "USER_TABS_ENABLED=${USER_TABS_ENV_VALUE}")
     if $ANY_DI_INPUT; then
         SET_ENV_VARS+=("DI_AUTH_MODE=${DI_AUTH_MODE}")
         if [[ "$DI_AUTH_MODE" == "identity" ]]; then

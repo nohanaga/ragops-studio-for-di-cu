@@ -31,6 +31,9 @@ param(
     [Parameter(Mandatory = $false)]
     [bool]$UploadsEnabled = $true,
 
+    [Parameter(Mandatory = $false)]
+    [bool]$UserTabsEnabled = $false,
+
     # === Persistent Storage Configuration (Azure Files) ===
     # Storage account name (auto-generated if not provided)
     [Parameter(Mandatory = $false)]
@@ -377,6 +380,7 @@ catch {
 
 $ImageTag = Get-DefaultImageTag -Tag $ImageTag
 $uploadsEnvValue = if ($UploadsEnabled) { "true" } else { "false" }
+$userTabsEnvValue = if ($UserTabsEnabled) { "true" } else { "false" }
 
 # Resolve resource groups (defaults to main resource group)
 if (-not $DiResourceGroupName) { $DiResourceGroupName = $ResourceGroupName }
@@ -602,7 +606,10 @@ if (-not $appExists) {
     }
 
     # Build env vars list
-    $envVarsList = @("UPLOADS_ENABLED=$uploadsEnvValue")
+    $envVarsList = @(
+        "UPLOADS_ENABLED=$uploadsEnvValue",
+        "USER_TABS_ENABLED=$userTabsEnvValue"
+    )
     if ($di) {
         if ($DiAuthMode -eq "identity") {
             $envVarsList += @("DI_ENDPOINT=$($di.Endpoint)", "DI_AUTH_MODE=identity")
@@ -730,7 +737,10 @@ else {
     }
 
     # ── Build env vars ─────────────────────────────────────────
-    $setEnvVars = @("UPLOADS_ENABLED=$uploadsEnvValue")
+    $setEnvVars = @(
+        "UPLOADS_ENABLED=$uploadsEnvValue",
+        "USER_TABS_ENABLED=$userTabsEnvValue"
+    )
     if ($di) {
         $setEnvVars += @("DI_AUTH_MODE=$DiAuthMode")
         if ($DiAuthMode -eq "identity") {
