@@ -90,6 +90,36 @@ resource acrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   }
 }
 
+resource documentIntelligenceAccess 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(documentIntelligence.id, imagePullIdentity.id, cognitiveServicesUserRoleDefinitionId)
+  scope: documentIntelligence
+  properties: {
+    principalId: imagePullIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: cognitiveServicesUserRoleDefinitionId
+  }
+}
+
+resource contentUnderstandingAccess 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(contentUnderstanding.id, imagePullIdentity.id, cognitiveServicesUserRoleDefinitionId)
+  scope: contentUnderstanding
+  properties: {
+    principalId: imagePullIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: cognitiveServicesUserRoleDefinitionId
+  }
+}
+
+resource storageAccess 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(storageAccount.id, imagePullIdentity.id, storageBlobDataContributorRoleDefinitionId)
+  scope: storageAccount
+  properties: {
+    principalId: imagePullIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: storageBlobDataContributorRoleDefinitionId
+  }
+}
+
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   name: storageAccountName
   location: location
@@ -172,7 +202,7 @@ resource containerApp 'Microsoft.App/containerApps@2025-01-01' = {
     'azd-service-name': 'app'
   })
   identity: {
-    type: 'SystemAssigned, UserAssigned'
+    type: 'UserAssigned'
     userAssignedIdentities: {
       '${imagePullIdentity.id}': {}
     }
@@ -200,6 +230,10 @@ resource containerApp 'Microsoft.App/containerApps@2025-01-01' = {
           name: 'app'
           image: 'mcr.microsoft.com/k8se/quickstart:latest'
           env: [
+            {
+              name: 'AZURE_CLIENT_ID'
+              value: imagePullIdentity.properties.clientId
+            }
             {
               name: 'AZURE_STORAGE_ACCOUNT_NAME'
               value: storageAccount.name
@@ -255,37 +289,10 @@ resource containerApp 'Microsoft.App/containerApps@2025-01-01' = {
   }
   dependsOn: [
     acrPull
+    contentUnderstandingAccess
+    documentIntelligenceAccess
+    storageAccess
   ]
-}
-
-resource documentIntelligenceAccess 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(documentIntelligence.id, containerApp.id, cognitiveServicesUserRoleDefinitionId)
-  scope: documentIntelligence
-  properties: {
-    principalId: containerApp.identity.principalId
-    principalType: 'ServicePrincipal'
-    roleDefinitionId: cognitiveServicesUserRoleDefinitionId
-  }
-}
-
-resource contentUnderstandingAccess 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(contentUnderstanding.id, containerApp.id, cognitiveServicesUserRoleDefinitionId)
-  scope: contentUnderstanding
-  properties: {
-    principalId: containerApp.identity.principalId
-    principalType: 'ServicePrincipal'
-    roleDefinitionId: cognitiveServicesUserRoleDefinitionId
-  }
-}
-
-resource storageAccess 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(storageAccount.id, containerApp.id, storageBlobDataContributorRoleDefinitionId)
-  scope: storageAccount
-  properties: {
-    principalId: containerApp.identity.principalId
-    principalType: 'ServicePrincipal'
-    roleDefinitionId: storageBlobDataContributorRoleDefinitionId
-  }
 }
 
 output containerAppName string = containerApp.name

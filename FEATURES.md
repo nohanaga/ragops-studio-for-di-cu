@@ -793,6 +793,8 @@ form-action 'self'
 
 ## 24. Deployment (Azure Container Apps)
 
+See the [deployment guide](DEPLOYMENT_GUIDE.md) for detailed `azd`, Azure CLI, Blob / SMB storage, Managed Identity, and Easy Auth configuration.
+
 ### Deploy Script (`scripts/deploy_aca.ps1`)
 
 PowerShell script that automates the full deployment:

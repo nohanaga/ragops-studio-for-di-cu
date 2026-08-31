@@ -793,6 +793,8 @@ form-action 'self'
 
 ## 24. デプロイ (Azure Container Apps)
 
+具体的な `azd`、Azure CLI、Blob / SMB ストレージ、Managed Identity、Easy Auth の設定は [デプロイガイド](DEPLOYMENT_GUIDE.ja.md)を参照してください。
+
 ### デプロイスクリプト (`scripts/deploy_aca.ps1`)
 
 デプロイの全自動化 PowerShell スクリプト:

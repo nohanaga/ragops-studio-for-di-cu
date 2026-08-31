@@ -69,16 +69,9 @@ class BlobDocumentStore:
             _build_blob_service_client(account_name)
             .get_container_client(container_name)
         )
-        self._ensure_container()
         self._docs: dict[str, StoredDocument] = {}
         self._lock = threading.Lock()
         self._load_index()
-
-    def _ensure_container(self) -> None:
-        try:
-            self._container.get_container_properties()
-        except Exception:
-            self._container.create_container()
 
     # ── Public API (same as local DocumentStore) ───────────────
 
