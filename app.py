@@ -672,7 +672,7 @@ def create_app() -> Flask:
 if __name__ == "__main__":
     app = create_app()
     host = os.getenv("HOST", "0.0.0.0")
-    port = int(os.getenv("PORT", "5003"))
+    port = int(os.getenv("PORT", "5000"))
     debug = os.getenv("APP_DEBUG", "false").strip().lower() in {
         "1",
         "true",
