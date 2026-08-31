@@ -122,11 +122,14 @@ class AnalysisJobExecutor:
 def create_app() -> Flask:
     app = Flask(__name__, static_folder="static", template_folder="templates")
 
-    analysis_workers = max(1, int(os.getenv("ANALYSIS_WORKERS", "4")))
-    analysis_queue_size = max(
-        analysis_workers,
-        int(os.getenv("ANALYSIS_QUEUE_SIZE", "32")),
-    )
+    def _env_int(name: str, default: int) -> int:
+        try:
+            return int(os.getenv(name, str(default)))
+        except (TypeError, ValueError):
+            return default
+
+    analysis_workers = max(1, _env_int("ANALYSIS_WORKERS", 4))
+    analysis_queue_size = max(analysis_workers, _env_int("ANALYSIS_QUEUE_SIZE", 32))
     analysis_executor = AnalysisJobExecutor(
         max_workers=analysis_workers,
         max_queue_size=analysis_queue_size,
